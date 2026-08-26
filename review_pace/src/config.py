@@ -74,16 +74,21 @@ DEFAULTS: Dict[str, Any] = {
         "enabled": False,
         "seconds_per_card": 12.0,
         "per_deck_seconds": {},  # {"<deck id>": seconds}
-        "show_badge": True,
+        # The running timer and the out-of-time warning are independent: you
+        # can have a timer with no warning, a warning with no timer, or both.
+        "show_timer": True,
         "count_down": True,
-        "warn_at_pct": 80,
+        "badge_position": "top-right",
+        "scale": 1.0,
+        "alert_style": "badge",  # "none", "badge", "exclamation" or "both"
+        "alert_position": "lower-half",
+        "alert_text": "!",
+        "alert_scale": 1.0,
         "start_on": "question",  # "question" or "answer"
         "pulse_when_over": True,
         "sound": False,
-        "badge_position": "top-right",
-        "scale": 1.0,
-        "session_pace_warning": True,
     },
+    "debug": False,
 }
 
 
@@ -156,10 +161,30 @@ def normalise(stored: Any) -> Dict[str, Any]:
 
     goal = cfg["goal"]
     goal["seconds_per_card"] = max(1.0, min(600.0, float(goal["seconds_per_card"])))
-    goal["warn_at_pct"] = max(10, min(100, int(goal["warn_at_pct"])))
     goal["scale"] = max(0.6, min(2.0, float(goal["scale"])))
+    goal["alert_scale"] = max(0.5, min(4.0, float(goal["alert_scale"])))
+    if goal["alert_style"] not in ("none", "badge", "exclamation", "both"):
+        goal["alert_style"] = "badge"
+    if goal["alert_position"] not in ("upper-half", "center", "lower-half"):
+        goal["alert_position"] = "lower-half"
+    if goal["badge_position"] not in (
+        "top-right", "top-left", "bottom-right", "bottom-left"
+    ):
+        goal["badge_position"] = "top-right"
+    if not str(goal["alert_text"]).strip():
+        goal["alert_text"] = "!"
     if not isinstance(goal["per_deck_seconds"], dict):
         goal["per_deck_seconds"] = {}
+    # An alert that recolours the timer needs the timer to be on screen.
+    if not goal["show_timer"] and goal["alert_style"] == "badge":
+        goal["alert_style"] = "exclamation"
+    # Nothing to show at all means the feature is off.
+    if not goal["show_timer"] and goal["alert_style"] == "none":
+        goal["enabled"] = False
+    # Old configs used a percentage warning stage; it is gone.
+    goal.pop("warn_at_pct", None)
+    goal.pop("show_badge", None)
+    goal.pop("session_pace_warning", None)
 
     cfg["decks"]["ids"] = [int(x) for x in cfg["decks"]["ids"] if str(x).lstrip("-").isdigit()]
     cfg["version"] = CONFIG_VERSION

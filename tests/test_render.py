@@ -116,6 +116,7 @@ def test_reviewer_payload_and_script():
         sess.record(6000)
     payload = RV.build_payload(make_snapshot(), cfg, sess, 12.0, True)
     assert payload["goal"]["seconds"] == 12.0
+    assert payload["goal"]["show_timer"] is True
     assert "eta" in payload["hud"]["html"]
     js = RV.script(payload)
     assert js.count("(") == js.count(")")
@@ -143,3 +144,37 @@ def test_css_braces_are_balanced():
     css = home.T.panel_css(C.normalise({}))
     assert css.count("{") == css.count("}")
     assert "{p}" not in css and "{gap}" not in css
+
+
+def test_warning_only_mode_has_no_timer():
+    cfg = C.normalise({"goal": {"enabled": True, "show_timer": False,
+                                "alert_style": "exclamation", "alert_text": "!"}})
+    from src.session import LiveSession
+
+    payload = RV.build_payload(None, cfg, LiveSession(), 15.0, False)
+    assert payload["goal"]["show_timer"] is False
+    assert payload["goal"]["alert_style"] == "exclamation"
+    js = RV.script(payload)
+    assert "rvp-alert" in js
+
+
+def test_alert_position_reaches_the_script():
+    for position, css_top in (("lower-half", '"50%"'), ("upper-half", '"0"'),
+                              ("center", '"0"')):
+        cfg = C.normalise({"goal": {"enabled": True, "alert_style": "exclamation",
+                                    "alert_position": position}})
+        from src.session import LiveSession
+
+        payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False)
+        assert payload["goal"]["alert_position"] == position
+        assert css_top in RV.script(payload)
+
+
+def test_script_has_no_leftover_format_markers():
+    from src.session import LiveSession
+
+    cfg = C.normalise({"goal": {"enabled": True, "alert_style": "both"}})
+    js = RV.script(RV.build_payload(make_snapshot(), cfg, LiveSession(), 10.0, True))
+    assert "%(" not in js
+    assert "%%" not in js
+    assert js.count("{") == js.count("}")

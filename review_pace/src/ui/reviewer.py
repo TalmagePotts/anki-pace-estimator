@@ -15,7 +15,7 @@ from ..collector import Snapshot
 from ..session import LiveSession, remaining_estimate
 
 _STYLE = """
-#rvp-hud, #rvp-goal {
+#rvp-hud, #rvp-goal, #rvp-alert {
   position: fixed; z-index: 2147483000; pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-variant-numeric: tabular-nums; user-select: none;
@@ -50,14 +50,20 @@ _STYLE = """
   color: var(--fg, inherit);
   transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
-#rvp-goal.rvp-warn {
-  color: #fff; background: #d99b1a; border-color: #d99b1a;
-}
 #rvp-goal.rvp-over {
   color: #fff; background: #d9484d; border-color: #d9484d;
   animation: rvp-pulse 1s ease-in-out infinite;
 }
 #rvp-goal.rvp-nopulse { animation: none; }
+#rvp-alert {
+  left: 0; right: 0; display: none;
+  align-items: center; justify-content: center;
+  color: #d9484d; font-weight: 800; line-height: 1;
+  text-shadow: 0 2px 14px rgba(0,0,0,.28);
+  opacity: 0; transition: opacity .18s ease;
+}
+#rvp-alert.rvp-show { display: flex; opacity: .92; }
+#rvp-alert.rvp-pulsing { animation: rvp-pulse 1s ease-in-out infinite; }
 @keyframes rvp-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(1.09); opacity: .82; }
@@ -74,19 +80,25 @@ _JS = r"""
     el.style[v] = inset + "px";
     el.style[h] = inset + "px";
   }
+  function ensure(id) {
+    var el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement("div");
+      el.id = id;
+      document.body.appendChild(el);
+    }
+    return el;
+  }
   if (!document.getElementById("rvp-style")) {
     var st = document.createElement("style");
     st.id = "rvp-style";
     st.textContent = %(style)s;
     document.head.appendChild(st);
   }
+
   var hud = document.getElementById("rvp-hud");
   if (S.hud) {
-    if (!hud) {
-      hud = document.createElement("div");
-      hud.id = "rvp-hud";
-      document.body.appendChild(hud);
-    }
+    hud = ensure("rvp-hud");
     hud.innerHTML = S.hud.html;
     hud.style.opacity = S.hud.opacity;
     hud.style.fontSize = S.hud.scale + "em";
@@ -98,20 +110,43 @@ _JS = r"""
 
   if (window.__rvpTimer) { clearInterval(window.__rvpTimer); window.__rvpTimer = null; }
   var badge = document.getElementById("rvp-goal");
-  if (!S.goal) { if (badge) badge.style.display = "none"; return; }
-  if (!badge) {
-    badge = document.createElement("div");
-    badge.id = "rvp-goal";
-    document.body.appendChild(badge);
+  var alert = document.getElementById("rvp-alert");
+  if (!S.goal) {
+    if (badge) badge.style.display = "none";
+    if (alert) alert.className = "";
+    return;
   }
-  badge.style.display = "";
-  badge.style.fontSize = S.goal.scale + "em";
-  place(badge, S.goal.position, 14);
+  var G = S.goal;
+
+  if (G.show_timer) {
+    badge = ensure("rvp-goal");
+    badge.style.display = "";
+    badge.style.fontSize = G.scale + "em";
+    place(badge, G.position, 14);
+  } else if (badge) {
+    badge.style.display = "none";
+  }
+
+  var wantAlert = G.alert_style === "exclamation" || G.alert_style === "both";
+  if (wantAlert) {
+    alert = ensure("rvp-alert");
+    alert.textContent = G.alert_text;
+    alert.className = "";
+    alert.style.fontSize = (22 * G.alert_scale) + "vh";
+    if (G.alert_position === "center") {
+      alert.style.top = "0"; alert.style.height = "100%%";
+    } else if (G.alert_position === "upper-half") {
+      alert.style.top = "0"; alert.style.height = "50%%";
+    } else {
+      alert.style.top = "50%%"; alert.style.height = "50%%";
+    }
+  } else if (alert) {
+    alert.className = "";
+  }
 
   var start = Date.now();
-  var target = S.goal.seconds * 1000;
-  var warn = target * (S.goal.warn_at_pct / 100);
-  var chimed = false;
+  var target = G.seconds * 1000;
+  var fired = false;
   function beep() {
     try {
       var ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -126,7 +161,7 @@ _JS = r"""
   }
   function fmt(ms) {
     var neg = ms < 0;
-    var s = Math.floor(Math.abs(ms) / 1000);
+    var s = Math.round(Math.abs(ms) / 1000);
     var m = Math.floor(s / 60);
     s = s %% 60;
     var txt = m > 0 ? m + ":" + (s < 10 ? "0" : "") + s : String(s);
@@ -134,11 +169,16 @@ _JS = r"""
   }
   function tick() {
     var elapsed = Date.now() - start;
-    var over = elapsed > target;
-    badge.textContent = S.goal.count_down ? fmt(target - elapsed) : fmt(elapsed);
-    badge.className = over ? "rvp-over" : (elapsed > warn ? "rvp-warn" : "");
-    if (over && !S.goal.pulse) badge.className += " rvp-nopulse";
-    if (over && !chimed) { chimed = true; if (S.goal.sound) beep(); }
+    var over = elapsed >= target;
+    if (G.show_timer && badge) {
+      badge.textContent = G.count_down ? fmt(target - elapsed) : fmt(elapsed);
+      var recolour = over && (G.alert_style === "badge" || G.alert_style === "both");
+      badge.className = recolour ? (G.pulse ? "rvp-over" : "rvp-over rvp-nopulse") : "";
+    }
+    if (wantAlert && alert) {
+      alert.className = over ? (G.pulse ? "rvp-show rvp-pulsing" : "rvp-show") : "";
+    }
+    if (over && !fired) { fired = true; if (G.sound) beep(); }
   }
   tick();
   window.__rvpTimer = setInterval(tick, 200);
@@ -199,15 +239,19 @@ def build_payload(snap: Optional[Snapshot], cfg, session: LiveSession,
             }
 
     goal = cfg["goal"]
-    if goal["enabled"] and goal["show_badge"] and goal_seconds:
+    if goal["enabled"] and goal_seconds:
         payload["goal"] = {
             "seconds": float(goal_seconds),
+            "show_timer": bool(goal["show_timer"]),
             "count_down": bool(goal["count_down"]),
-            "warn_at_pct": int(goal["warn_at_pct"]),
-            "pulse": bool(goal["pulse_when_over"]),
-            "sound": bool(goal["sound"]),
             "position": goal["badge_position"],
             "scale": float(goal["scale"]),
+            "alert_style": goal["alert_style"],
+            "alert_position": goal["alert_position"],
+            "alert_text": str(goal["alert_text"]),
+            "alert_scale": float(goal["alert_scale"]),
+            "pulse": bool(goal["pulse_when_over"]),
+            "sound": bool(goal["sound"]),
         }
     return payload
 

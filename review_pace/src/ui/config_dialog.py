@@ -367,44 +367,76 @@ class ConfigDialog(QDialog):
 
         goal = QGroupBox("Per-card time goal")
         gform = QFormLayout(goal)
-        self.goal_enabled = QCheckBox("Warn me when a card takes too long")
+        self.goal_enabled = QCheckBox("Keep an eye on how long each card takes")
         self.goal_seconds = QDoubleSpinBox()
         self.goal_seconds.setRange(1.0, 600.0)
         self.goal_seconds.setSuffix(" s")
+        self.goal_seconds.setDecimals(1)
+        self.goal_start = QComboBox()
+        self.goal_start.addItem("When the question appears", "question")
+        self.goal_start.addItem("When I reveal the answer", "answer")
+
+        self.goal_show_timer = QCheckBox("Show a running timer on every card")
         self.goal_countdown = QCheckBox("Count down to zero (rather than up)")
-        self.goal_warn = QSpinBox()
-        self.goal_warn.setRange(10, 100)
-        self.goal_warn.setSuffix(" %")
-        self.goal_pulse = QCheckBox("Pulse the badge once you are over")
-        self.goal_sound = QCheckBox("Play a short chime when you go over")
         self.goal_pos = QComboBox()
         for pos in K.OVERLAY_POSITIONS:
             self.goal_pos.addItem(pos.replace("-", " ").title(), pos)
         self.goal_scale = QDoubleSpinBox()
         self.goal_scale.setRange(0.6, 2.0)
         self.goal_scale.setSingleStep(0.05)
-        self.goal_start = QComboBox()
-        self.goal_start.addItem("When the question appears", "question")
-        self.goal_start.addItem("When I reveal the answer", "answer")
+
+        self.alert_style = QComboBox()
+        self.alert_style.addItem("Nothing", "none")
+        self.alert_style.addItem("Turn the timer red", "badge")
+        self.alert_style.addItem("Big symbol over the card", "exclamation")
+        self.alert_style.addItem("Both", "both")
+        self.alert_text = QLineEdit()
+        self.alert_text.setMaxLength(8)
+        self.alert_text.setPlaceholderText("!")
+        self.alert_pos = QComboBox()
+        self.alert_pos.addItem("Lower half of the screen", "lower-half")
+        self.alert_pos.addItem("Middle of the screen", "center")
+        self.alert_pos.addItem("Upper half of the screen", "upper-half")
+        self.alert_scale = QDoubleSpinBox()
+        self.alert_scale.setRange(0.5, 4.0)
+        self.alert_scale.setSingleStep(0.1)
+        self.goal_pulse = QCheckBox("Pulse the warning")
+        self.goal_sound = QCheckBox("Play a short chime when time is up")
 
         gform.addRow("", self.goal_enabled)
-        gform.addRow("Goal per card", self.goal_seconds)
+        gform.addRow("Time per card", self.goal_seconds)
         gform.addRow("Timer starts", self.goal_start)
+        gform.addRow("", self.goal_show_timer)
         gform.addRow("", self.goal_countdown)
-        gform.addRow("Turn amber at", self.goal_warn)
+        gform.addRow("Timer corner", self.goal_pos)
+        gform.addRow("Timer size", self.goal_scale)
+        gform.addRow("When time is up", self.alert_style)
+        gform.addRow("Symbol", self.alert_text)
+        gform.addRow("Symbol position", self.alert_pos)
+        gform.addRow("Symbol size", self.alert_scale)
         gform.addRow("", self.goal_pulse)
         gform.addRow("", self.goal_sound)
-        gform.addRow("Corner", self.goal_pos)
-        gform.addRow("Size", self.goal_scale)
+
+        preview = QPushButton("Preview it here")
+        preview.setAutoDefault(False)
+        preview.clicked.connect(self._preview_goal)
+        gform.addRow("", preview)
         lay.addWidget(goal)
         lay.addWidget(
             _label(
-                "The badge is drawn by the add-on, so it works on every card in "
-                "every note type — nothing to add to your templates. Per-deck goals "
-                "are set on the Decks tab."
+                "The warning fires at exactly the time you set above — there is no "
+                "early stage. Turn the timer off and pick “Big symbol” if you would "
+                "rather see nothing at all until you are out of time. Per-deck times "
+                "are set on the Decks tab.\n\n"
+                "It is drawn by the add-on, so it works on every card in every note "
+                "type — nothing to add to your templates."
             )
         )
         lay.addStretch(1)
+
+        for widget in (self.goal_enabled, self.goal_show_timer):
+            widget.toggled.connect(self._sync_goal_enabled)
+        self.alert_style.currentIndexChanged.connect(self._sync_goal_enabled)
         return page
 
     def _toolbar_tab(self) -> QWidget:
@@ -430,8 +462,56 @@ class ConfigDialog(QDialog):
                 "{speed} seconds per card · {done} answered today · {finish} finish time."
             )
         )
+
+        trouble = QGroupBox("Troubleshooting")
+        tlay = QVBoxLayout(trouble)
+        self.debug = QCheckBox("Write a debug log")
+        tlay.addWidget(self.debug)
+        log_btn = QPushButton("Show recent activity…")
+        log_btn.setAutoDefault(False)
+        log_btn.clicked.connect(self._show_log)
+        tlay.addWidget(log_btn)
+        lay.addWidget(trouble)
         lay.addStretch(1)
         return page
+
+    def _show_log(self) -> None:
+        from .. import log as L
+
+        text = L.recent() or "Nothing recorded yet."
+        if L.path():
+            text += "\n\nFull log: %s" % L.path()
+        box = QMessageBox(self)
+        box.setWindowTitle("%s — recent activity" % K.ADDON_NAME)
+        box.setText("What the add-on has been doing:")
+        box.setDetailedText(text)
+        box.exec()
+
+    def _sync_goal_enabled(self) -> None:
+        on = self.goal_enabled.isChecked()
+        timer = on and self.goal_show_timer.isChecked()
+        style = self.alert_style.currentData()
+        symbol = on and style in ("exclamation", "both")
+        for widget in (
+            self.goal_seconds, self.goal_start, self.goal_show_timer,
+            self.alert_style, self.goal_pulse, self.goal_sound,
+        ):
+            widget.setEnabled(on)
+        for widget in (self.goal_countdown, self.goal_pos, self.goal_scale):
+            widget.setEnabled(timer)
+        for widget in (self.alert_text, self.alert_pos, self.alert_scale):
+            widget.setEnabled(symbol)
+
+    def _preview_goal(self) -> None:
+        """Run the badge and warning on this dialog's parent window.
+
+        Waiting for a card to time out is a slow way to check a setting, so the
+        preview uses a two second goal against whatever is on screen now.
+        """
+        from .. import runtime
+
+        cfg = self._collect()
+        runtime.preview_goal(cfg)
 
     # -- load / save -----------------------------------------------------
     def _load(self) -> None:
@@ -494,13 +574,19 @@ class ConfigDialog(QDialog):
         g = cfg["goal"]
         self.goal_enabled.setChecked(g["enabled"])
         self.goal_seconds.setValue(g["seconds_per_card"])
+        self.goal_show_timer.setChecked(g["show_timer"])
         self.goal_countdown.setChecked(g["count_down"])
-        self.goal_warn.setValue(g["warn_at_pct"])
-        self.goal_pulse.setChecked(g["pulse_when_over"])
-        self.goal_sound.setChecked(g["sound"])
         self._set_combo(self.goal_pos, g["badge_position"])
         self.goal_scale.setValue(g["scale"])
+        self._set_combo(self.alert_style, g["alert_style"])
+        self.alert_text.setText(g["alert_text"])
+        self._set_combo(self.alert_pos, g["alert_position"])
+        self.alert_scale.setValue(g["alert_scale"])
+        self.goal_pulse.setChecked(g["pulse_when_over"])
+        self.goal_sound.setChecked(g["sound"])
         self._set_combo(self.goal_start, g["start_on"])
+        self.debug.setChecked(cfg.get("debug", False))
+        self._sync_goal_enabled()
 
         t = cfg["toolbar"]
         self.toolbar_enabled.setChecked(t["enabled"])
@@ -571,16 +657,21 @@ class ConfigDialog(QDialog):
             {
                 "enabled": self.goal_enabled.isChecked(),
                 "seconds_per_card": self.goal_seconds.value(),
+                "show_timer": self.goal_show_timer.isChecked(),
                 "count_down": self.goal_countdown.isChecked(),
-                "warn_at_pct": self.goal_warn.value(),
-                "pulse_when_over": self.goal_pulse.isChecked(),
-                "sound": self.goal_sound.isChecked(),
                 "badge_position": self.goal_pos.currentData(),
                 "scale": self.goal_scale.value(),
+                "alert_style": self.alert_style.currentData(),
+                "alert_text": self.alert_text.text().strip() or "!",
+                "alert_position": self.alert_pos.currentData(),
+                "alert_scale": self.alert_scale.value(),
+                "pulse_when_over": self.goal_pulse.isChecked(),
+                "sound": self.goal_sound.isChecked(),
                 "start_on": self.goal_start.currentData(),
                 "per_deck_seconds": self.deck_tree.goals(),
             }
         )
+        cfg["debug"] = self.debug.isChecked()
         cfg["toolbar"].update(
             {
                 "enabled": self.toolbar_enabled.isChecked(),

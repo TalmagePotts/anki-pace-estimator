@@ -11,4 +11,8 @@ proper settings dialog with a deck picker. Editing the JSON here works too.
   measured from your own history, instead of one answer per card.
 - **display.components** — ordered list of home-screen blocks with an
   `enabled` flag each.
-- **goal** — per-card time goal and the countdown badge shown while reviewing.
+- **goal.show_timer** — whether a running timer appears on every card.
+- **goal.alert_style** — what happens when time is up: `none`, `badge` (turn the
+  timer red), `exclamation` (a large symbol over the card) or `both`.
+- **goal.alert_position** — `lower-half`, `center` or `upper-half`.
+- **debug** — write a log to `review_pace_debug.log` in your add-ons folder.

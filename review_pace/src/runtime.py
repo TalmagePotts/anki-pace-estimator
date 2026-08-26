@@ -5,11 +5,12 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from aqt import gui_hooks, mw
-from aqt.qt import QAction, QKeySequence
+from aqt.qt import QAction, QKeySequence, QTimer
 from aqt.utils import tooltip
 
 from . import config as CFG
 from . import consts as K
+from . import log as L
 from .collector import CACHE, build_snapshot, refresh_workload
 from .session import SESSION
 from .ui import home
@@ -29,6 +30,15 @@ def config() -> Dict[str, Any]:
     global _cfg_cache
     if _cfg_cache is None:
         _cfg_cache = CFG.normalise(mw.addonManager.getConfig(K.ADDON_PACKAGE))
+        L.configure(_cfg_cache.get("debug", False))
+        L.log(
+            "config loaded: decks=%s goal=%s timer=%s alert=%s overlay=%s",
+            _cfg_cache["decks"]["ids"] or "all",
+            _cfg_cache["goal"]["enabled"],
+            _cfg_cache["goal"]["show_timer"],
+            _cfg_cache["goal"]["alert_style"],
+            _cfg_cache["overlay"]["enabled"],
+        )
     return _cfg_cache
 
 
@@ -67,26 +77,22 @@ def _current_deck_ids() -> Optional[List[int]]:
 # ---------------------------------------------------------------------------
 
 
+@L.guard("deck browser")
 def _on_deck_browser(deck_browser, content) -> None:
     cfg = config()
     if not cfg["display"]["show_on_deck_browser"]:
         return
-    try:
-        html = home.render(_snapshot(), cfg)
-    except Exception:
-        return
+    html = home.render(_snapshot(), cfg)
     if html:
         content.stats += html
 
 
+@L.guard("overview")
 def _on_overview(overview, content) -> None:
     cfg = config()
     if not cfg["display"]["show_on_overview"]:
         return
-    try:
-        html = home.render(_snapshot(override_decks=_current_deck_ids()), cfg)
-    except Exception:
-        return
+    html = home.render(_snapshot(override_decks=_current_deck_ids()), cfg)
     if html:
         content.table += html
 
@@ -132,14 +138,12 @@ def _toolbar_text(cfg) -> Optional[str]:
         return fields["eta"]
 
 
+@L.guard("toolbar")
 def _on_toolbar_links(links: List[str], toolbar) -> None:
     cfg = config()
     if not cfg["toolbar"]["enabled"]:
         return
-    try:
-        text = _toolbar_text(cfg)
-    except Exception:
-        return
+    text = _toolbar_text(cfg)
     if not text:
         return
     links.append(
@@ -180,11 +184,15 @@ def _refresh_toolbar() -> None:
 def _goal_seconds_for_card(card) -> Optional[float]:
     cfg = config()
     if not cfg["goal"]["enabled"]:
+        L.log("goal: turned off in settings")
         return None
     did = int(getattr(card, "odid", 0) or card.did)
-    return CFG.goal_seconds_for(cfg, did)
+    secs = CFG.goal_seconds_for(cfg, did)
+    L.log("goal: deck %s -> %.1fs", did, secs)
+    return secs
 
 
+@L.guard("inject")
 def _inject(card=None) -> None:
     cfg = config()
     global _review_snap
@@ -192,19 +200,21 @@ def _inject(card=None) -> None:
         _review_snap = build_snapshot(mw.col, cfg, _current_deck_ids())
     else:
         refresh_workload(_review_snap, mw.col, cfg)
-    payload = RV.build_payload(
-        _review_snap,
-        cfg,
-        SESSION,
-        _goal_seconds_for_card(card) if card is not None else None,
-        _hud_visible,
+    goal_seconds = _goal_seconds_for_card(card) if card is not None else None
+    payload = RV.build_payload(_review_snap, cfg, SESSION, goal_seconds, _hud_visible)
+    L.log(
+        "inject: goal=%s hud=%s",
+        payload["goal"]["seconds"] if payload["goal"] else None,
+        bool(payload["hud"]),
     )
-    try:
-        mw.reviewer.web.eval(RV.script(payload))
-    except Exception:
-        pass
+    web = getattr(mw.reviewer, "web", None)
+    if web is None:
+        L.log("inject: no reviewer webview")
+        return
+    web.eval(RV.script(payload))
 
 
+@L.guard("show question")
 def _on_show_question(card) -> None:
     if config()["goal"]["start_on"] == "answer":
         # Draw the HUD now, but hold the badge back: passing no card means no
@@ -214,18 +224,24 @@ def _on_show_question(card) -> None:
     _inject(card)
 
 
+@L.guard("show answer")
 def _on_show_answer(card) -> None:
     if config()["goal"]["start_on"] == "answer":
         _inject(card)
 
 
+@L.guard("answer card")
 def _on_answer_card(reviewer, card, ease) -> None:
-    try:
-        SESSION.record(int(card.time_taken()))
-    except Exception:
-        SESSION.record(0)
+    SESSION.record(int(card.time_taken()))
+    L.log(
+        "answered: %dms, session %d cards at %.1fs",
+        card.time_taken(),
+        SESSION.answers,
+        SESSION.wall_per_card,
+    )
 
 
+@L.guard("state change")
 def _on_state_change(new_state: str, old_state: str) -> None:
     global _review_snap, _hud_visible
     if new_state == "review" and old_state != "review":
@@ -237,13 +253,13 @@ def _on_state_change(new_state: str, old_state: str) -> None:
         _review_snap = None
 
 
+@L.guard("reviewer end")
 def _on_reviewer_end() -> None:
     global _review_snap
     _review_snap = None
-    try:
-        mw.reviewer.web.eval(RV.clear_script())
-    except Exception:
-        pass
+    web = getattr(mw.reviewer, "web", None)
+    if web is not None:
+        web.eval(RV.clear_script())
 
 
 def _toggle_hud() -> None:
@@ -253,6 +269,7 @@ def _toggle_hud() -> None:
     tooltip("Review Pace HUD %s" % ("shown" if _hud_visible else "hidden"), period=900)
 
 
+@L.guard("shortcuts")
 def _on_shortcuts(state: str, shortcuts: List) -> None:
     if state != "review":
         return
@@ -266,6 +283,7 @@ def _on_shortcuts(state: str, shortcuts: List) -> None:
 # ---------------------------------------------------------------------------
 
 
+@L.guard("install menu")
 def _install_menu() -> None:
     action = QAction("%s…" % K.ADDON_NAME, mw)
     action.setShortcut(QKeySequence("Ctrl+Shift+P"))
@@ -301,11 +319,49 @@ def install() -> None:
     gui_hooks.state_shortcuts_will_change.append(_on_shortcuts)
 
     gui_hooks.profile_did_open.append(_on_profile_open)
-    gui_hooks.main_window_did_init.append(_install_menu)
+    if getattr(mw, "form", None) is not None:
+        _install_menu()
+    else:
+        gui_hooks.main_window_did_init.append(_install_menu)
+    L.log("installed")
 
 
 def _on_profile_open() -> None:
     on_config_changed()
+
+
+PREVIEW_SECONDS = 3.0
+PREVIEW_CLEAR_MS = 9000
+
+
+def preview_goal(cfg: Dict[str, Any]) -> None:
+    """Show the timer and warning on the current screen for a few seconds.
+
+    Sitting on a card waiting for it to time out is a slow way to check a
+    setting, so the preview shortens the goal and clears itself.
+    """
+    web = getattr(mw, "web", None)
+    if web is None:
+        return
+    preview = CFG.normalise(cfg)
+    preview["goal"]["enabled"] = True
+    seconds = min(PREVIEW_SECONDS, float(preview["goal"]["seconds_per_card"]))
+    payload = RV.build_payload(None, preview, SESSION, seconds, False)
+    web.eval(RV.script(payload))
+    L.log("preview: %.1fs goal on the main window", seconds)
+    QTimer.singleShot(PREVIEW_CLEAR_MS, lambda: _clear_preview(web))
+    tooltip(
+        "Previewing a %.0f second card — the warning fires in %.0f seconds."
+        % (seconds, seconds),
+        period=int(PREVIEW_CLEAR_MS),
+    )
+
+
+def _clear_preview(web) -> None:
+    try:
+        web.eval(RV.clear_script())
+    except Exception:
+        pass
 
 
 def _open_config_action() -> None:

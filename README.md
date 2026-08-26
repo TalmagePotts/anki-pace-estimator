@@ -46,10 +46,19 @@ detailed window at **Tools ▸ Review Pace…**.
 
 ## Per-card time goal
 
-Set a target seconds-per-card (globally, or per deck on the Decks tab) and a
-badge counts down on every card, turning amber as you approach the limit and red
-when you go over. It is drawn by the add-on, so it works on every note type
-without editing a single card template.
+Set a target seconds-per-card, globally or per deck on the Decks tab. The timer
+and the out-of-time warning are independent, so you can have:
+
+- a running timer that turns red when you go over,
+- a large symbol over the lower half of the card and no timer at all, so nothing
+  distracts you until you are actually out of time,
+- or both.
+
+The warning fires at exactly the time you set — there is no early warning stage.
+Everything is drawn by the add-on, so it works on every note type without
+editing a single card template. **Preview it here** on the settings tab runs the
+whole thing on the current screen with a shortened goal, so you can check a
+setting without sitting through a real card.
 
 ## Development
 
@@ -57,3 +66,8 @@ without editing a single card template.
 
 `review_pace/src/stats.py` holds all the arithmetic and imports nothing from
 Anki, so the numbers are testable without launching the app.
+
+Turn on **Troubleshooting ▸ Write a debug log** in the settings to get
+`review_pace_debug.log` in your add-ons folder, or read the in-memory tail with
+**Show recent activity…**. Every hook the add-on registers is wrapped so a
+failure is logged rather than breaking the screen it is attached to.

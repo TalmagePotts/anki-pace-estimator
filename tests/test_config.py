@@ -29,13 +29,13 @@ def test_unknown_keys_are_preserved():
 def test_out_of_range_values_are_clamped():
     cfg = C.normalise(
         {"speed": {"lookback_days": 99999, "idle_cutoff_s": 0, "mode": "nonsense"},
-         "display": {"font_scale": 9.0}, "goal": {"warn_at_pct": 500}}
+         "display": {"font_scale": 9.0}, "goal": {"alert_scale": 99}}
     )
     assert cfg["speed"]["lookback_days"] == 3650
     assert cfg["speed"]["idle_cutoff_s"] == 5
     assert cfg["speed"]["mode"] == "wall"
     assert cfg["display"]["font_scale"] == 2.0
-    assert cfg["goal"]["warn_at_pct"] == 100
+    assert cfg["goal"]["alert_scale"] == 4.0
 
 
 def test_component_list_is_repaired():
@@ -72,3 +72,37 @@ def test_bad_per_deck_goal_falls_back():
     cfg = C.normalise({"goal": {"seconds_per_card": 10, "per_deck_seconds": {"5": "abc", "6": 0}}})
     assert C.goal_seconds_for(cfg, 5) == 10.0
     assert C.goal_seconds_for(cfg, 6) == 10.0
+
+
+def test_timer_off_forces_a_visible_warning_style():
+    # "Turn the timer red" is meaningless with no timer on screen.
+    cfg = C.normalise({"goal": {"show_timer": False, "alert_style": "badge"}})
+    assert cfg["goal"]["alert_style"] == "exclamation"
+
+
+def test_nothing_to_show_turns_the_goal_off():
+    cfg = C.normalise({"goal": {"enabled": True, "show_timer": False,
+                                "alert_style": "none"}})
+    assert cfg["goal"]["enabled"] is False
+
+
+def test_timer_only_is_allowed():
+    cfg = C.normalise({"goal": {"enabled": True, "show_timer": True,
+                                "alert_style": "none"}})
+    assert cfg["goal"]["enabled"] is True
+    assert cfg["goal"]["alert_style"] == "none"
+
+
+def test_percentage_warning_is_dropped_from_old_configs():
+    cfg = C.normalise({"goal": {"warn_at_pct": 80, "show_badge": True}})
+    assert "warn_at_pct" not in cfg["goal"]
+    assert "show_badge" not in cfg["goal"]
+
+
+def test_bad_alert_values_are_repaired():
+    cfg = C.normalise({"goal": {"alert_style": "sparkles", "alert_position": "sideways",
+                                "alert_text": "   ", "badge_position": "middle"}})
+    assert cfg["goal"]["alert_style"] == "badge"
+    assert cfg["goal"]["alert_position"] == "lower-half"
+    assert cfg["goal"]["alert_text"] == "!"
+    assert cfg["goal"]["badge_position"] == "top-right"
