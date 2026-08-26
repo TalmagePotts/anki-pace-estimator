@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "decks": {
+    "ids": [],
+    "include_subdecks": true,
+    "follow_current_deck": true
+  },
+  "speed": {
+    "mode": "wall",
+    "aggregate": "median",
+    "lookback_days": 30,
+    "max_rows": 60000,
+    "idle_cutoff_s": 60,
+    "max_answer_s": 60,
+    "per_card_class": true,
+    "count_full_learning": true,
+    "include_lapses": true
+  },
+  "display": {
+    "components": [
+      {
+        "id": "eta",
+        "enabled": true
+      },
+      {
+        "id": "workload",
+        "enabled": true
+      },
+      {
+        "id": "speed",
+        "enabled": true
+      },
+      {
+        "id": "learned",
+        "enabled": true
+      },
+      {
+        "id": "done_today",
+        "enabled": true
+      },
+      {
+        "id": "breakdown",
+        "enabled": false
+      }
+    ],
+    "show_on_deck_browser": true,
+    "show_on_overview": true,
+    "show_eta_range": true,
+    "show_finish_time": true,
+    "clock_24h": false,
+    "compact": false,
+    "columns": 0,
+    "accent": "",
+    "font_scale": 1.0,
+    "period_mode": "rolling",
+    "title": "Review Pace",
+    "show_title": true
+  },
+  "toolbar": {
+    "enabled": true,
+    "template": "\u23f1 {eta}",
+    "click_action": "stats",
+    "hide_when_empty": true
+  },
+  "overlay": {
+    "enabled": true,
+    "position": "top-right",
+    "opacity": 0.92,
+    "show_remaining": true,
+    "show_eta": true,
+    "show_session_speed": true,
+    "show_progress_bar": true,
+    "show_elapsed": false,
+    "hotkey": "Shift+P",
+    "scale": 1.0
+  },
+  "goal": {
+    "enabled": false,
+    "seconds_per_card": 12.0,
+    "per_deck_seconds": {},
+    "show_badge": true,
+    "count_down": true,
+    "warn_at_pct": 80,
+    "start_on": "question",
+    "pulse_when_over": true,
+    "sound": false,
+    "badge_position": "top-right",
+    "scale": 1.0,
+    "session_pace_warning": true
+  }
+}

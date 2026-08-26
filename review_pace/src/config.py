@@ -1,0 +1,182 @@
+"""Typed, self-healing access to the add-on's configuration.
+
+Anki hands add-ons a raw ``dict`` loaded from ``config.json``.  Users (and
+older versions of this add-on) can leave keys missing, so every read goes
+through :func:`get` which deep-merges the stored values over the defaults.
+"""
+
+from __future__ import annotations
+
+import copy
+from typing import Any, Dict, List
+
+from .consts import DEFAULT_COMPONENT_ORDER, SPEED_MODE_WALL
+
+CONFIG_VERSION = 1
+
+DEFAULTS: Dict[str, Any] = {
+    "version": CONFIG_VERSION,
+    "decks": {
+        # Empty list means "every deck".
+        "ids": [],
+        "include_subdecks": True,
+        # When reviewing, measure the deck you are actually in rather than the
+        # saved selection.
+        "follow_current_deck": True,
+    },
+    "speed": {
+        "mode": SPEED_MODE_WALL,  # "wall" or "answer"
+        "aggregate": "median",  # "median", "mean" or "trimmed"
+        "lookback_days": 30,
+        "max_rows": 60000,
+        "idle_cutoff_s": 60,
+        "max_answer_s": 60,
+        "per_card_class": True,
+        "count_full_learning": True,
+        "include_lapses": True,
+    },
+    "display": {
+        "components": [
+            {"id": cid, "enabled": cid != "breakdown"} for cid in DEFAULT_COMPONENT_ORDER
+        ],
+        "show_on_deck_browser": True,
+        "show_on_overview": True,
+        "show_eta_range": True,
+        "show_finish_time": True,
+        "clock_24h": False,
+        "compact": False,
+        "columns": 0,  # 0 = auto-fit
+        "accent": "",  # "" follows Anki's theme accent
+        "font_scale": 1.0,
+        "period_mode": "rolling",  # "rolling" or "calendar"
+        "title": "Review Pace",
+        "show_title": True,
+    },
+    "toolbar": {
+        "enabled": True,
+        "template": "⏱ {eta}",
+        "click_action": "stats",  # "stats", "config" or "none"
+        "hide_when_empty": True,
+    },
+    "overlay": {
+        "enabled": True,
+        "position": "top-right",
+        "opacity": 0.92,
+        "show_remaining": True,
+        "show_eta": True,
+        "show_session_speed": True,
+        "show_progress_bar": True,
+        "show_elapsed": False,
+        "hotkey": "Shift+P",
+        "scale": 1.0,
+    },
+    "goal": {
+        "enabled": False,
+        "seconds_per_card": 12.0,
+        "per_deck_seconds": {},  # {"<deck id>": seconds}
+        "show_badge": True,
+        "count_down": True,
+        "warn_at_pct": 80,
+        "start_on": "question",  # "question" or "answer"
+        "pulse_when_over": True,
+        "sound": False,
+        "badge_position": "top-right",
+        "scale": 1.0,
+        "session_pace_warning": True,
+    },
+}
+
+
+def _merge(defaults: Any, stored: Any) -> Any:
+    if isinstance(defaults, dict):
+        out = {}
+        stored_d = stored if isinstance(stored, dict) else {}
+        for key, dval in defaults.items():
+            out[key] = _merge(dval, stored_d.get(key))
+        # Preserve unknown keys so a downgrade does not silently drop settings.
+        for key, sval in stored_d.items():
+            if key not in out:
+                out[key] = sval
+        return out
+    if stored is None:
+        return copy.deepcopy(defaults)
+    if isinstance(defaults, bool):
+        return bool(stored)
+    if isinstance(defaults, float) and isinstance(stored, (int, float)):
+        return float(stored)
+    if isinstance(defaults, int) and not isinstance(defaults, bool):
+        try:
+            return int(stored)
+        except (TypeError, ValueError):
+            return defaults
+    if isinstance(defaults, list) and not isinstance(stored, list):
+        return copy.deepcopy(defaults)
+    return stored
+
+
+def normalise(stored: Any) -> Dict[str, Any]:
+    """Deep-merge ``stored`` over :data:`DEFAULTS` and repair known problems."""
+    cfg = _merge(DEFAULTS, stored)
+
+    # The component list must contain every known component exactly once, so a
+    # new release can add one without the user losing their ordering.
+    seen = []
+    cleaned: List[Dict[str, Any]] = []
+    for entry in cfg["display"]["components"]:
+        if not isinstance(entry, dict):
+            entry = {"id": str(entry), "enabled": True}
+        cid = entry.get("id")
+        if cid in DEFAULT_COMPONENT_ORDER and cid not in seen:
+            seen.append(cid)
+            cleaned.append({"id": cid, "enabled": bool(entry.get("enabled", True))})
+    for cid in DEFAULT_COMPONENT_ORDER:
+        if cid not in seen:
+            cleaned.append({"id": cid, "enabled": False})
+    cfg["display"]["components"] = cleaned
+
+    sp = cfg["speed"]
+    sp["lookback_days"] = max(1, min(3650, sp["lookback_days"]))
+    sp["idle_cutoff_s"] = max(5, min(3600, sp["idle_cutoff_s"]))
+    sp["max_answer_s"] = max(5, min(600, sp["max_answer_s"]))
+    sp["max_rows"] = max(500, min(1000000, sp["max_rows"]))
+    if sp["mode"] not in ("wall", "answer"):
+        sp["mode"] = "wall"
+    if sp["aggregate"] not in ("median", "mean", "trimmed"):
+        sp["aggregate"] = "median"
+
+    disp = cfg["display"]
+    disp["font_scale"] = max(0.7, min(2.0, float(disp["font_scale"])))
+    disp["columns"] = max(0, min(6, int(disp["columns"])))
+
+    ov = cfg["overlay"]
+    ov["opacity"] = max(0.2, min(1.0, float(ov["opacity"])))
+    ov["scale"] = max(0.6, min(2.0, float(ov["scale"])))
+    if ov["position"] not in ("top-right", "top-left", "bottom-right", "bottom-left"):
+        ov["position"] = "top-right"
+
+    goal = cfg["goal"]
+    goal["seconds_per_card"] = max(1.0, min(600.0, float(goal["seconds_per_card"])))
+    goal["warn_at_pct"] = max(10, min(100, int(goal["warn_at_pct"])))
+    goal["scale"] = max(0.6, min(2.0, float(goal["scale"])))
+    if not isinstance(goal["per_deck_seconds"], dict):
+        goal["per_deck_seconds"] = {}
+
+    cfg["decks"]["ids"] = [int(x) for x in cfg["decks"]["ids"] if str(x).lstrip("-").isdigit()]
+    cfg["version"] = CONFIG_VERSION
+    return cfg
+
+
+def enabled_components(cfg: Dict[str, Any]) -> List[str]:
+    return [c["id"] for c in cfg["display"]["components"] if c["enabled"]]
+
+
+def goal_seconds_for(cfg: Dict[str, Any], deck_id: int) -> float:
+    """Per-card goal for a deck, falling back to the global default."""
+    per_deck = cfg["goal"]["per_deck_seconds"]
+    val = per_deck.get(str(deck_id), per_deck.get(deck_id))
+    try:
+        if val is not None and float(val) > 0:
+            return float(val)
+    except (TypeError, ValueError):
+        pass
+    return float(cfg["goal"]["seconds_per_card"])
