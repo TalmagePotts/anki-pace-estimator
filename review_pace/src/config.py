@@ -26,7 +26,7 @@ DEFAULTS: Dict[str, Any] = {
     },
     "speed": {
         "mode": SPEED_MODE_WALL,  # "wall" or "answer"
-        "aggregate": "median",  # "median", "mean" or "trimmed"
+        "aggregate": "mean",  # "mean" or "trimmed"
         "lookback_days": 30,
         "max_rows": 60000,
         "idle_cutoff_s": 60,
@@ -45,7 +45,9 @@ DEFAULTS: Dict[str, Any] = {
         "show_finish_time": True,
         "clock_24h": False,
         "compact": False,
-        "columns": 0,  # 0 = auto-fit
+        # 0 picks a column count from the number of tiles, so the last row
+        # is full wherever the arithmetic allows.
+        "columns": 0,
         "accent": "",  # "" follows Anki's theme accent
         "font_scale": 1.0,
         "period_mode": "rolling",  # "rolling" or "calendar"
@@ -146,8 +148,10 @@ def normalise(stored: Any) -> Dict[str, Any]:
     sp["max_rows"] = max(500, min(1000000, sp["max_rows"]))
     if sp["mode"] not in ("wall", "answer"):
         sp["mode"] = "wall"
-    if sp["aggregate"] not in ("median", "mean", "trimmed"):
-        sp["aggregate"] = "median"
+    if sp["aggregate"] not in ("mean", "trimmed"):
+        # "median" was offered once; multiplying a median by a card count
+        # underestimates every session, so it maps onto the mean.
+        sp["aggregate"] = "mean"
 
     disp = cfg["display"]
     disp["font_scale"] = max(0.7, min(2.0, float(disp["font_scale"])))

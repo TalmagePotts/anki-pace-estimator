@@ -30,19 +30,40 @@ def accent_for(cfg) -> str:
     return custom or ACCENT
 
 
-def panel_css(cfg) -> str:
+#: Column counts worth considering. One is excluded deliberately: a single
+#: column always divides evenly and would otherwise win every tie.
+CANDIDATE_COLUMNS = (4, 3, 2)
+
+
+def auto_columns(tile_count: int) -> int:
+    """Pick a column count that leaves the fewest empty cells in the last row.
+
+    Auto-fitting to the panel width gave whatever happened to fit, which left a
+    single orphan tile stranded on its own row. Choosing the count from the
+    number of tiles keeps every row full where the arithmetic allows it, and
+    prefers wider tiles when several counts tie.
+    """
+    if tile_count <= 1:
+        return 1
+
+    def waste(columns: int) -> tuple:
+        remainder = tile_count % columns
+        empty = 0 if remainder == 0 else columns - remainder
+        # Fewest empty cells wins; ties go to the wider layout.
+        return (empty, -columns)
+
+    return min(CANDIDATE_COLUMNS, key=waste)
+
+
+def panel_css(cfg, tile_count: int = 0) -> str:
     scale = float(cfg["display"]["font_scale"])
     compact = bool(cfg["display"]["compact"])
     pad = "10px 12px" if compact else "14px 16px"
-    gap = "6px" if compact else "10px"
-    value_size = round(1.45 * scale, 3)
-    min_tile = 104 if compact else 118
-    columns = int(cfg["display"]["columns"])
-    grid = (
-        "repeat(%d, minmax(0, 1fr))" % columns
-        if columns
-        else "repeat(auto-fit, minmax(%dpx, 1fr))" % min_tile
-    )
+    gap = "6px" if compact else "9px"
+    tile_pad = "7px 10px" if compact else "9px 12px"
+    value_size = round(1.5 * scale, 3)
+    columns = int(cfg["display"]["columns"]) or auto_columns(tile_count)
+    grid = "repeat(%d, minmax(0, 1fr))" % columns
     return """
 <style>
 .{p}-panel {{
@@ -53,70 +74,73 @@ def panel_css(cfg) -> str:
   text-align: left;
   background: {canvas};
   border: 1px solid {border};
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: {base}em;
   color: {fg};
-  box-shadow: 0 1px 2px rgba(0,0,0,.06);
 }}
 .{p}-head {{
   display: flex; align-items: baseline; justify-content: space-between;
   gap: 8px; margin-bottom: {gap};
 }}
 .{p}-title {{
-  font-weight: 600; font-size: .82em; letter-spacing: .06em;
+  font-weight: 600; font-size: .78em; letter-spacing: .08em;
   text-transform: uppercase; color: {subtle};
 }}
 .{p}-deck {{
   font-size: .78em; color: {faint}; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; max-width: 55%;
 }}
-.{p}-grid {{ display: grid; grid-template-columns: {grid}; gap: {gap}; }}
+.{p}-grid {{
+  display: grid; grid-template-columns: {grid}; gap: {gap};
+  align-items: stretch;
+}}
 .{p}-tile {{
-  background: {inset}; border-radius: 8px; padding: 8px 10px;
-  border-left: 3px solid transparent; min-width: 0;
-}}
-.{p}-value {{
-  font-size: {vsize}em; font-weight: 650; line-height: 1.15;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
-}}
-.{p}-sub {{
-  font-size: .72em; color: {subtle}; margin-top: 1px;
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
+  display: flex; flex-direction: column; gap: 1px;
+  background: {inset}; border-radius: 9px; padding: {tpad};
+  min-width: 0;
 }}
 .{p}-label {{
-  font-size: .64em; letter-spacing: .07em; text-transform: uppercase;
-  color: {faint}; margin-top: 4px;
+  font-size: .64em; letter-spacing: .08em; text-transform: uppercase;
+  color: {faint}; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-weight: 600;
 }}
-.{p}-chips {{
-  display: flex; flex-wrap: wrap; gap: 6px; margin-top: {gap};
+.{p}-value {{
+  font-size: {vsize}em; font-weight: 650; line-height: 1.2;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
 }}
+.{p}-unit {{ font-size: .56em; font-weight: 500; color: {subtle}; }}
+.{p}-sub {{
+  font-size: .7em; color: {subtle};
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}}
+.{p}-chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin-top: {gap}; }}
 .{p}-chip {{
-  font-size: .72em; padding: 3px 8px; border-radius: 999px;
+  font-size: .7em; padding: 3px 9px; border-radius: 999px;
   background: {inset}; color: {subtle}; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }}
 .{p}-chip b {{ color: {fg}; font-weight: 600; }}
 .{p}-foot {{
-  margin-top: {gap}; font-size: .72em; color: {faint};
+  margin-top: {gap}; font-size: .7em; color: {faint};
   display: flex; justify-content: space-between; gap: 8px; align-items: center;
 }}
 .{p}-btn {{
   cursor: pointer; color: {faint}; text-decoration: none;
-  border: 1px solid transparent; border-radius: 6px; padding: 1px 6px;
-  font-size: .95em; user-select: none;
+  border-radius: 6px; padding: 2px 6px; user-select: none;
 }}
-.{p}-btn:hover {{ color: {fg}; border-color: {border}; background: {inset}; }}
-.{p}-empty {{ font-size: .82em; color: {subtle}; padding: 2px 0; }}
-.{p}-new {{ border-left-color: {cnew}; }}
-.{p}-learn {{ border-left-color: {clearn}; }}
-.{p}-review {{ border-left-color: {creview}; }}
-.{p}-accent {{ border-left-color: {accent}; }}
+.{p}-btn:hover {{ color: {fg}; background: {inset}; }}
+.{p}-new .{p}-label {{ color: {cnew}; }}
+.{p}-learn .{p}-label {{ color: {clearn}; }}
+.{p}-review .{p}-label {{ color: {creview}; }}
+.{p}-accent .{p}-label {{ color: {accent}; }}
 </style>
 """.format(
         p=PREFIX,
         pad=pad,
         gap=gap,
+        tpad=tile_pad,
         grid=grid,
         base=round(scale, 3),
         vsize=value_size,
@@ -143,14 +167,22 @@ def esc(text) -> str:
     )
 
 
-def tile(value: str, label: str, sub: str = "", kind: str = "accent") -> str:
+def tile(value: str, label: str, sub: str = "", kind: str = "accent",
+         unit: str = "") -> str:
+    """One statistic.
+
+    The label sits above the value so that every tile lines up regardless of
+    whether it has a sub-line, and the unit is a separate, smaller span so a
+    long value never has to be truncated to fit its unit in.
+    """
     sub_html = '<div class="%s-sub">%s</div>' % (PREFIX, esc(sub)) if sub else ""
+    unit_html = '<span class="%s-unit">%s</span>' % (PREFIX, esc(unit)) if unit else ""
     return (
         '<div class="{p}-tile {p}-{k}">'
-        '<div class="{p}-value">{v}</div>{s}'
         '<div class="{p}-label">{l}</div>'
+        '<div class="{p}-value">{v}{u}</div>{s}'
         "</div>"
-    ).format(p=PREFIX, k=kind, v=esc(value), s=sub_html, l=esc(label))
+    ).format(p=PREFIX, k=kind, v=esc(value), u=unit_html, s=sub_html, l=esc(label))
 
 
 def chip(label: str, value: str) -> str:
@@ -184,5 +216,10 @@ def panel(cfg, tiles: List[str], chips: Optional[List[str]] = None,
             '<div class="{p}-foot"><div>{l}</div><div>{r}</div></div>'
         ).format(p=PREFIX, l=footer_left, r=footer_right)
     return '{css}<div class="{p}-panel">{head}{grid}{chips}{foot}</div>'.format(
-        css=panel_css(cfg), p=PREFIX, head=head, grid=grid, chips=chip_html, foot=foot
+        css=panel_css(cfg, len(tiles)),
+        p=PREFIX,
+        head=head,
+        grid=grid,
+        chips=chip_html,
+        foot=foot,
     )

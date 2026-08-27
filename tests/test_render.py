@@ -48,7 +48,7 @@ def test_panel_contains_every_enabled_component():
     cfg = C.normalise({"display": {"components": [
         {"id": cid, "enabled": True} for cid in K.DEFAULT_COMPONENT_ORDER]}})
     html = home.render(make_snapshot(), cfg)
-    for label in ("Time remaining", "Due", "New", "Learning",
+    for label in ("Time left", "Due", "New", "Learning",
                   "New learned today", "Answered today"):
         assert label in html
     assert "Mature" in html  # breakdown chips
@@ -58,7 +58,7 @@ def test_panel_contains_every_enabled_component():
 def test_disabled_components_are_absent():
     cfg = C.normalise({"display": {"components": [{"id": "eta", "enabled": True}]}})
     html = home.render(make_snapshot(), cfg)
-    assert "Time remaining" in html
+    assert "Time left" in html
     assert "New learned today" not in html
     assert "Answered today" not in html
 
@@ -81,8 +81,12 @@ def test_html_is_balanced_and_escaped():
 def test_speed_mode_switches_the_headline_number():
     wall = home.render(make_snapshot(), C.normalise({"speed": {"mode": "wall"}}))
     answer = home.render(make_snapshot(), C.normalise({"speed": {"mode": "answer"}}))
-    assert "Wall-clock speed" in wall and "6.6s/card" in wall
-    assert "Answer speed" in answer and "5.0s/card" in answer
+    # The unit is its own span, so a long value never has to be truncated to
+    # make room for it.
+    assert "Wall-clock speed" in wall
+    assert ">6.6<span class=\"rvp-unit\">s/card</span>" in wall
+    assert "Answer speed" in answer
+    assert ">5.0<span class=\"rvp-unit\">s/card</span>" in answer
 
 
 def test_finish_time_and_range_can_be_turned_off():
@@ -178,3 +182,59 @@ def test_script_has_no_leftover_format_markers():
     assert "%(" not in js
     assert "%%" not in js
     assert js.count("{") == js.count("}")
+
+
+def test_column_count_is_chosen_to_fill_the_last_row():
+    auto = home.T.auto_columns
+    assert auto(6) == 3   # two full rows, not 4 + 2
+    assert auto(4) == 4   # one full row
+    assert auto(3) == 3
+    assert auto(2) == 2
+    assert auto(1) == 1   # one tile is one column, not a lone cell in a row
+    assert auto(8) == 4
+    assert auto(9) == 3
+    assert auto(7) == 4   # nothing divides 7; 4 + 3 wastes the least
+    assert auto(5) == 3   # 3 + 2 beats 4 + 1
+    assert auto(0) == 1
+
+
+def test_layout_adapts_to_the_tiles_actually_shown():
+    snap = make_snapshot()
+    seven = home.render(snap, C.normalise({}))
+    assert seven.count('class="rvp-tile') == 7
+    assert "repeat(4, minmax(0, 1fr))" in seven
+
+    snap.workload = S.Workload(new_cards=20, review_cards=180, learning_reps=0)
+    six = home.render(snap, C.normalise({}))
+    assert six.count('class="rvp-tile') == 6
+    assert "repeat(3, minmax(0, 1fr))" in six
+
+
+def test_explicit_column_setting_wins():
+    html = home.render(make_snapshot(), C.normalise({"display": {"columns": 2}}))
+    assert "repeat(2, minmax(0, 1fr))" in html
+
+
+def test_labels_and_values_never_wrap():
+    css = home.T.panel_css(C.normalise({}))
+    for block in ("rvp-label", "rvp-value", "rvp-sub"):
+        section = css.split("." + block + " {")[1].split("}")[0]
+        assert "white-space: nowrap" in section, block
+        assert "text-overflow: ellipsis" in section, block
+
+
+def test_label_comes_before_the_value():
+    # Every tile lines up only if the label is the first row of each one.
+    html = home.render(make_snapshot(), C.normalise({}))
+    tile = html.split('class="rvp-tile')[1]
+    assert tile.index("rvp-label") < tile.index("rvp-value")
+
+
+def test_speed_tile_reports_the_mean_matching_answered_today():
+    # The headline speed and today's seconds-per-card are now the same kind of
+    # number, so they can be compared without them disagreeing.
+    snap = make_snapshot()
+    snap.today = S.DoneTotals(reviews=100, seconds=660, introduced=4)
+    html = home.render(snap, C.normalise({"speed": {"mode": "wall"}}))
+    assert ">6.6<" in html          # 30-day mean
+    assert "6.6s each" in html      # today: 660s / 100 cards

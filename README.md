@@ -16,6 +16,11 @@ things make that wrong, and Review Pace fixes all three:
    mature and relearning cards, then weighted by what you actually have due.
 3. **You will fail some reviews.** Cards graded Again come back within the same
    session. Your real Again-rate and relearning cost are folded in.
+4. **A total is a sum of averages, not of typical cards.** Card times are
+   right-skewed: most are quick and a few are slow, so the median sits well
+   below the mean. Multiplying the median by a card count underestimates every
+   session, so speeds are means. The median is still shown, labelled "typical",
+   and is never multiplied by anything.
 
 Cards already part-way through learning are counted by the answers they still
 owe (`cards.left`), not as one card each, and every count comes from Anki's own

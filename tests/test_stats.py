@@ -66,9 +66,14 @@ def test_speeds_split_by_class():
     for i in range(30):  # learning: 15s answers, 20s wall
         rows.append(rev(1000 + i * 20, 15, S.RT_LEARN, cid=200 + i))
     sp = S.compute_speeds(S.annotate(rows))
-    assert abs(sp.for_class(S.MATURE).wall - 8) < 0.01
-    assert abs(sp.for_class(S.MATURE).answer - 5) < 0.01
-    assert abs(sp.for_class(S.LEARN).wall - 20) < 0.01
+    mature = sp.for_class(S.MATURE)
+    # The typical (middle) card is a clean 8s; the mean is a shade under
+    # because the session's first card has no predecessor gap to measure and
+    # falls back to its 5s answer time.
+    assert abs(mature.wall_typical - 8) < 0.01
+    assert abs(mature.wall - 7.9) < 0.01
+    assert abs(mature.answer - 5) < 0.01
+    assert abs(sp.for_class(S.LEARN).wall_typical - 20) < 0.01
     assert sp.overhead_ratio > 0
 
 
@@ -239,3 +244,29 @@ def test_stdev():
     assert S.stdev([]) == 0.0
     assert S.stdev([4]) == 0.0
     assert abs(S.stdev([2, 4, 4, 4, 5, 5, 7, 9]) - 2.13809) < 0.0001
+
+
+def test_speed_used_for_estimates_is_a_mean_not_a_median():
+    # Nine quick cards and one slow one: the median says 5s, but ten cards
+    # really do take 95s, so an ETA built on the median would be 45% short.
+    rows = [rev(i * 8, 5, S.RT_REVIEW, ivl=100, cid=i) for i in range(9)]
+    rows.append(rev(9 * 8, 50, S.RT_REVIEW, ivl=100, cid=9))
+    sp = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1))
+    cs = sp.for_class(S.MATURE)
+    assert abs(cs.answer_typical - 5) < 0.01
+    assert abs(cs.answer - 9.5) < 0.01
+    assert abs(cs.answer * 10 - sum(r.time_ms for r in rows) / 1000) < 0.01
+
+
+def test_trimmed_option_discards_the_slow_tail():
+    rows = [rev(i * 8, 5, S.RT_REVIEW, ivl=100, cid=i) for i in range(18)]
+    rows += [rev(200 + i, 60, S.RT_REVIEW, ivl=100, cid=100 + i) for i in range(2)]
+    timed = S.annotate(rows, idle_cutoff_s=1)
+    plain = S.compute_speeds(timed, "mean").for_class(S.MATURE).answer
+    trimmed = S.compute_speeds(timed, "trimmed").for_class(S.MATURE).answer
+    assert trimmed < plain
+
+
+def test_unknown_aggregate_falls_back_to_the_mean():
+    assert S.aggregate([1, 2, 30], "median") == S.aggregate([1, 2, 30], "mean")
+    assert S.aggregate([], "mean") == 0.0

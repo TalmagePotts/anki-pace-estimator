@@ -7,7 +7,7 @@
   },
   "speed": {
     "mode": "wall",
-    "aggregate": "median",
+    "aggregate": "mean",
     "lookback_days": 30,
     "max_rows": 60000,
     "idle_cutoff_s": 60,

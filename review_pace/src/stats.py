@@ -126,13 +126,21 @@ def trimmed_mean(values: Sequence[float], trim_pct: float = 10.0) -> float:
 
 
 def aggregate(values: Sequence[float], method: str) -> float:
+    """The per-card figure an ETA should be built from.
+
+    This is deliberately a mean, not a median.  The total time for a session is
+    the *sum* of its cards, and the expected sum is ``n x mean``.  Card times
+    are right-skewed -- most are quick, a few are slow -- so the median sits
+    well below the mean, and multiplying it by the card count underestimates
+    every session.  Outliers are already bounded by the answer-time cap and the
+    idle cutoff, so the mean is safe to use here; ``trimmed`` is available for
+    anyone who wants the slowest tail discarded as well.
+    """
     if not values:
         return 0.0
-    if method == "mean":
-        return sum(values) / len(values)
     if method == "trimmed":
         return trimmed_mean(values)
-    return percentile(values, 50.0)  # "median", the default
+    return sum(values) / len(values)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +201,10 @@ class ClassSpeed:
     n: int = 0
     answer: float = 0.0
     wall: float = 0.0
+    #: The middle card. Lower than the mean, because card times are
+    #: right-skewed. Shown as "typical", never multiplied by a card count.
+    answer_typical: float = 0.0
+    wall_typical: float = 0.0
     #: 80th percentile of a *single* answer. Shown in the breakdown table; not
     #: used for the ETA -- see :func:`estimate` for why.
     answer_slow: float = 0.0
@@ -209,6 +221,9 @@ class ClassSpeed:
 
     def sd(self, mode: str) -> float:
         return self.answer_sd if mode == "answer" else self.wall_sd
+
+    def typical(self, mode: str) -> float:
+        return self.answer_typical if mode == "answer" else self.wall_typical
 
 
 @dataclass
@@ -259,6 +274,8 @@ def _class_speed(items: Sequence[TimedReview], method: str) -> ClassSpeed:
         n=len(items),
         answer=aggregate(answers, method),
         wall=aggregate(walls, method),
+        answer_typical=percentile(answers, 50.0),
+        wall_typical=percentile(walls, 50.0),
         answer_slow=percentile(answers, SLOW_PCT),
         wall_slow=percentile(walls, SLOW_PCT),
         answer_sd=stdev(answers),

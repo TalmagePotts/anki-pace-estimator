@@ -11,32 +11,28 @@ from . import theme as T
 
 def _eta_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     if not snap.total_cards:
-        return [T.tile("All done", "Time remaining", "nothing waiting", "review")], []
+        return [T.tile("All done", "Time left", "nothing waiting", "review")], []
     if not snap.has_speed_data:
-        return [T.tile("--", "Time remaining", "no review history yet", "accent")], []
+        return [T.tile("--", "Time left", "no review history yet", "accent")], []
 
     est = snap.estimate
-    value = K.fmt_duration(est.seconds)
     subs = []
     if cfg["display"]["show_eta_range"] and est.seconds_slow > est.seconds * 1.02:
-        subs.append(
-            "%s - %s"
-            % (K.fmt_duration(est.seconds), K.fmt_duration(est.seconds_slow))
-        )
+        subs.append("up to %s" % K.fmt_duration(est.seconds_slow))
     if cfg["display"]["show_finish_time"]:
-        subs.append("done by %s" % K.fmt_clock(snap.finish_epoch, cfg["display"]["clock_24h"]))
-    return [T.tile(value, "Time remaining", " · ".join(subs), "accent")], []
+        subs.append("by %s" % K.fmt_clock(snap.finish_epoch, cfg["display"]["clock_24h"]))
+    return [T.tile(K.fmt_duration(est.seconds), "Time left", " · ".join(subs), "accent")], []
 
 
 def _workload_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     w = snap.workload
     tiles = [
-        T.tile(str(w.review_cards), "Due", "reviews", "review"),
-        T.tile(str(w.new_cards), "New", "to introduce", "new"),
+        T.tile(str(w.review_cards), "Due", "", "review"),
+        T.tile(str(w.new_cards), "New", "", "new"),
     ]
     if w.learning_reps:
-        label = "answers left" if cfg["speed"]["count_full_learning"] else "cards"
-        tiles.append(T.tile(str(w.learning_reps), "Learning", label, "learn"))
+        sub = "answers left" if cfg["speed"]["count_full_learning"] else ""
+        tiles.append(T.tile(str(w.learning_reps), "Learning", sub, "learn"))
     return tiles, []
 
 
@@ -44,27 +40,27 @@ def _speed_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     if not snap.has_speed_data:
         return [], []
     overall = snap.speeds.overall
-    primary_is_wall = cfg["speed"]["mode"] == K.SPEED_MODE_WALL
-    primary = overall.wall if primary_is_wall else overall.answer
-    other = overall.answer if primary_is_wall else overall.wall
-    sub = "%s %s" % (
-        K.fmt_secs_per_card(other),
-        "answer only" if primary_is_wall else "incl. gaps",
-    )
-    label = "Wall-clock speed" if primary_is_wall else "Answer speed"
-    return [T.tile(K.fmt_secs_per_card(primary) + "/card", label, sub, "accent")], []
+    wall_mode = cfg["speed"]["mode"] == K.SPEED_MODE_WALL
+    primary = overall.wall if wall_mode else overall.answer
+    other = overall.answer if wall_mode else overall.wall
+    label = "Wall-clock speed" if wall_mode else "Answer speed"
+    sub = "%s %.1fs" % ("answer only" if wall_mode else "with gaps", other)
+    return [T.tile("%.1f" % primary, label, sub, "accent", unit="s/card")], []
 
 
 def _learned_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
-    sub = "%d week · %d month" % (snap.week.introduced, snap.month.introduced)
+    if cfg["display"]["period_mode"] == "calendar":
+        sub = "%d this week · %d this month" % (snap.week.introduced, snap.month.introduced)
+    else:
+        sub = "%d in 7d · %d in 30d" % (snap.week.introduced, snap.month.introduced)
     return [T.tile(str(snap.today.introduced), "New learned today", sub, "new")], []
 
 
 def _done_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     t = snap.today
-    sub = K.fmt_duration(t.seconds) if t.seconds else "nothing yet"
-    if t.reviews:
-        sub += " · %s/card" % K.fmt_secs_per_card(t.seconds / t.reviews)
+    if not t.reviews:
+        return [T.tile("0", "Answered today", "nothing yet", "review")], []
+    sub = "%s · %.1fs each" % (K.fmt_duration(t.seconds), t.seconds / t.reviews)
     return [T.tile(str(t.reviews), "Answered today", sub, "review")], []
 
 
@@ -79,12 +75,7 @@ def _breakdown_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
         cs = snap.speeds.per_class.get(cls)
         if not cs or not cs.n:
             continue
-        chips.append(
-            T.chip(
-                CLASS_LABELS[cls],
-                "%s  (%d)" % (K.fmt_secs_per_card(cs.pick(mode)), cs.n),
-            )
-        )
+        chips.append(T.chip(CLASS_LABELS[cls], "%.1fs" % cs.pick(mode)))
     if snap.behaviour.reps_per_new > 1.05:
         chips.append(T.chip("Answers per new card", "%.1f" % snap.behaviour.reps_per_new))
     if snap.behaviour.lapse_rate:
