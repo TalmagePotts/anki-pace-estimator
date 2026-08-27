@@ -72,10 +72,12 @@ def _install_stubs():
         "QPushButton QCheckBox QSpinBox QDoubleSpinBox QComboBox QRadioButton "
         "QGroupBox QTabWidget QTreeWidget QTreeWidgetItem QListWidget "
         "QListWidgetItem QDialogButtonBox QAbstractItemView QHeaderView Qt "
-        "QKeySequence QKeySequenceEdit QShortcut QMessageBox QAction"
+        "QKeySequence QShortcut QMessageBox QAction QToolButton "
+        "QAbstractSpinBox QTimer QKeyCombination"
     ).split():
         setattr(qt, symbol, _StubMeta(symbol, (_StubBase,), {}))
-    qt.__all__ = [s for s in dir(qt) if s.startswith("Q") or s == "Qt"]
+    qt.pyqtSignal = _Any()
+    qt.__all__ = [s for s in dir(qt) if s.startswith("Q") or s in ("Qt", "pyqtSignal")]
 
 
 def test_every_module_imports():
@@ -88,7 +90,9 @@ def test_every_module_imports():
         "src.stats",
         "src.collector",
         "src.session",
+        "src.log",
         "src.ui.theme",
+        "src.ui.widgets",
         "src.ui.home",
         "src.ui.reviewer",
         "src.ui.config_dialog",

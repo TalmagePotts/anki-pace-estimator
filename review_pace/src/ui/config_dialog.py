@@ -18,6 +18,7 @@ from aqt.utils import restoreGeom, saveGeom, tooltip
 from .. import config as CFG
 from .. import consts as K
 from ..collector import all_deck_rows
+from .widgets import HotkeyEdit, apply_minimum_sizes, expand_fields
 
 GOAL_COL = 1
 
@@ -49,7 +50,12 @@ class DeckTree(QTreeWidget):
         )
         self.header().setStretchLastSection(False)
         self.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        # Fixed and generous: this column is typed into, so it has to stay wide
+        # enough to use even when every deck leaves it blank.
+        self.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self.setColumnWidth(1, 130)
+        self.setStyleSheet("QTreeWidget::item { height: 26px; } "
+                           "QTreeWidget { font-size: 13px; }")
         self._items: Dict[int, QTreeWidgetItem] = {}
 
     def populate(self, rows: List[Tuple[int, str]], checked: List[int],
@@ -134,7 +140,7 @@ class ConfigDialog(QDialog):
     def __init__(self, parent=None) -> None:
         super().__init__(parent or mw)
         self.setWindowTitle("%s — settings" % K.ADDON_NAME)
-        self.setMinimumSize(660, 560)
+        self.setMinimumSize(720, 620)
         self.cfg = CFG.normalise(mw.addonManager.getConfig(K.ADDON_PACKAGE))
         self._original = copy.deepcopy(self.cfg)
         self._build()
@@ -164,6 +170,12 @@ class ConfigDialog(QDialog):
             self._restore_defaults
         )
         outer.addWidget(buttons)
+
+        # Applied once, at the end, so every input on every tab is covered --
+        # including ones added later.
+        for form in self.findChildren(QFormLayout):
+            expand_fields(form)
+        apply_minimum_sizes(self)
 
     def _decks_tab(self) -> QWidget:
         page = QWidget()
@@ -351,7 +363,7 @@ class ConfigDialog(QDialog):
         self.overlay_scale = QDoubleSpinBox()
         self.overlay_scale.setRange(0.6, 2.0)
         self.overlay_scale.setSingleStep(0.05)
-        self.overlay_hotkey = QKeySequenceEdit()
+        self.overlay_hotkey = HotkeyEdit()
 
         hform.addRow("", self.overlay_enabled)
         hform.addRow("Show", self.overlay_remaining)
@@ -569,7 +581,7 @@ class ConfigDialog(QDialog):
         self._set_combo(self.overlay_pos, o["position"])
         self.overlay_opacity.setValue(o["opacity"])
         self.overlay_scale.setValue(o["scale"])
-        self.overlay_hotkey.setKeySequence(QKeySequence(o["hotkey"]))
+        self.overlay_hotkey.setKeySequence(o["hotkey"])
 
         g = cfg["goal"]
         self.goal_enabled.setChecked(g["enabled"])

@@ -71,6 +71,10 @@ checked second by second rather than by eye. Those tests skip if Node is absent.
 `review_pace/src/stats.py` holds all the arithmetic and imports nothing from
 Anki, so the numbers are testable without launching the app.
 
+Shortcuts are recorded with a purpose-built widget rather than Qt's
+`QKeySequenceEdit`: click it, press the combination, and it is taken the moment
+you release every key, with an ✕ to clear it. Escape cancels, Backspace clears.
+
 Turn on **Troubleshooting ▸ Write a debug log** in the settings to get
 `review_pace_debug.log` in your add-ons folder, or read the in-memory tail with
 **Show recent activity…**. Every hook the add-on registers is wrapped so a
