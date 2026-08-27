@@ -22,5 +22,9 @@ proper settings dialog with a deck picker. Editing the JSON here works too.
 - **goal.show_timer** — whether a running timer appears on every card.
 - **goal.alert_style** — what happens when time is up: `none`, `badge` (turn the
   timer red), `exclamation` (a large symbol over the card) or `both`.
-- **goal.alert_position** — `lower-half`, `center` or `upper-half`.
+- **goal.alert_position** — `bottom`, `lower-half`, `center`, `upper-half` or
+  `top`.
+- **goal.timer_phase** — `whole_card`, `question`, `answer` or `separate`.
+- **goal.answer_seconds** — the allowance for the answer, used by `separate`.
+- **goal.alert_phase** — `always`, `question` or `answer`.
 - **debug** — write a log to `review_pace_debug.log` in your add-ons folder.

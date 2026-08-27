@@ -105,6 +105,12 @@ and the out-of-time warning are independent, so you can have:
   distracts you until you are actually out of time,
 - or both.
 
+The question and the answer are treated as separate phases, so **Clock runs**
+picks between one clock for the whole card, a clock that stops when you reveal
+the answer, one that only starts once you do, or a separate clock with its own
+allowance for the answer. **Warn me on** is independent of it: you can time the
+whole card but only be warned once the answer is showing.
+
 The warning fires at exactly the time you set — there is no early warning stage.
 Everything is drawn by the add-on, so it works on every note type without
 editing a single card template. **Preview it here** on the settings tab runs the

@@ -98,7 +98,15 @@ DEFAULTS: Dict[str, Any] = {
         "alert_position": "bottom",
         "alert_text": "!",
         "alert_scale": 1.0,
-        "start_on": "question",  # "question" or "answer"
+        # When the clock runs, and whether revealing the answer restarts it.
+        #   whole_card -- one clock from question to grade
+        #   question   -- clock stops when you reveal the answer
+        #   answer     -- clock starts when you reveal the answer
+        #   separate   -- a fresh clock, with its own goal, for the answer
+        "timer_phase": "whole_card",
+        "answer_seconds": 8.0,
+        # When the out-of-time warning is allowed to appear.
+        "alert_phase": "always",  # "always", "question" or "answer"
         "pulse_when_over": True,
         "sound": False,
     },
@@ -188,6 +196,11 @@ def normalise(stored: Any) -> Dict[str, Any]:
 
     goal = cfg["goal"]
     goal["seconds_per_card"] = max(1.0, min(600.0, float(goal["seconds_per_card"])))
+    goal["answer_seconds"] = max(1.0, min(600.0, float(goal["answer_seconds"])))
+    if goal["timer_phase"] not in ("whole_card", "question", "answer", "separate"):
+        goal["timer_phase"] = "whole_card"
+    if goal["alert_phase"] not in ("always", "question", "answer"):
+        goal["alert_phase"] = "always"
     goal["scale"] = max(0.6, min(2.0, float(goal["scale"])))
     goal["alert_scale"] = max(0.5, min(4.0, float(goal["alert_scale"])))
     if goal["alert_style"] not in ("none", "badge", "exclamation", "both"):
@@ -210,6 +223,10 @@ def normalise(stored: Any) -> Dict[str, Any]:
     # Nothing to show at all means the feature is off.
     if not goal["show_timer"] and goal["alert_style"] == "none":
         goal["enabled"] = False
+    # "start_on" became the richer timer_phase; carry the old meaning across.
+    legacy_start = goal.pop("start_on", None)
+    if legacy_start == "answer" and goal["timer_phase"] == "whole_card":
+        goal["timer_phase"] = "answer"
     # Old configs used a percentage warning stage; it is gone.
     goal.pop("warn_at_pct", None)
     goal.pop("show_badge", None)

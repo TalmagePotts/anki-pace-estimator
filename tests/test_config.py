@@ -148,3 +148,31 @@ def test_speed_display_choices():
     assert C.normalise({"display": {"speed_display": "?"}})["display"][
         "speed_display"
     ] == "mean"
+
+
+def test_timer_phase_and_alert_phase_are_independent():
+    cfg = C.normalise({"goal": {"timer_phase": "whole_card", "alert_phase": "answer"}})
+    assert cfg["goal"]["timer_phase"] == "whole_card"
+    assert cfg["goal"]["alert_phase"] == "answer"
+
+
+def test_bad_phase_values_are_repaired():
+    cfg = C.normalise({"goal": {"timer_phase": "sideways", "alert_phase": "maybe"}})
+    assert cfg["goal"]["timer_phase"] == "whole_card"
+    assert cfg["goal"]["alert_phase"] == "always"
+
+
+def test_old_start_on_answer_becomes_an_answer_phase_timer():
+    cfg = C.normalise({"goal": {"start_on": "answer"}})
+    assert "start_on" not in cfg["goal"]
+    assert cfg["goal"]["timer_phase"] == "answer"
+
+
+def test_old_start_on_question_keeps_the_whole_card_clock():
+    cfg = C.normalise({"goal": {"start_on": "question"}})
+    assert cfg["goal"]["timer_phase"] == "whole_card"
+
+
+def test_answer_seconds_is_clamped():
+    assert C.normalise({"goal": {"answer_seconds": 0}})["goal"]["answer_seconds"] == 1.0
+    assert C.normalise({"goal": {"answer_seconds": 9999}})["goal"]["answer_seconds"] == 600.0

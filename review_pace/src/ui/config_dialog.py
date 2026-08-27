@@ -443,9 +443,19 @@ class ConfigDialog(QDialog):
         self.goal_seconds.setRange(1.0, 600.0)
         self.goal_seconds.setSuffix(" s")
         self.goal_seconds.setDecimals(1)
-        self.goal_start = QComboBox()
-        self.goal_start.addItem("When the question appears", "question")
-        self.goal_start.addItem("When I reveal the answer", "answer")
+        self.timer_phase = QComboBox()
+        self.timer_phase.addItem("One clock for the whole card", "whole_card")
+        self.timer_phase.addItem("Only while the question is showing", "question")
+        self.timer_phase.addItem("Only once I reveal the answer", "answer")
+        self.timer_phase.addItem("A separate clock for the answer", "separate")
+        self.answer_seconds = QDoubleSpinBox()
+        self.answer_seconds.setRange(1.0, 600.0)
+        self.answer_seconds.setSuffix(" s")
+        self.answer_seconds.setDecimals(1)
+        self.alert_phase = QComboBox()
+        self.alert_phase.addItem("Either side of the card", "always")
+        self.alert_phase.addItem("Only while the question is showing", "question")
+        self.alert_phase.addItem("Only once I reveal the answer", "answer")
 
         self.goal_show_timer = QCheckBox("Show a running timer on every card")
         self.goal_countdown = QCheckBox("Count down to zero (rather than up)")
@@ -478,7 +488,9 @@ class ConfigDialog(QDialog):
 
         gform.addRow("", self.goal_enabled)
         gform.addRow("Time per card", self.goal_seconds)
-        gform.addRow("Timer starts", self.goal_start)
+        gform.addRow("Clock runs", self.timer_phase)
+        gform.addRow("Time for the answer", self.answer_seconds)
+        gform.addRow("Warn me on", self.alert_phase)
         gform.addRow("", self.goal_show_timer)
         gform.addRow("", self.goal_countdown)
         gform.addRow("Timer corner", self.goal_pos)
@@ -501,6 +513,10 @@ class ConfigDialog(QDialog):
                 "early stage. Turn the timer off and pick “Big symbol” if you would "
                 "rather see nothing at all until you are out of time. Per-deck times "
                 "are set on the Decks tab.\n\n"
+                "“Clock runs” and “Warn me on” are independent: you can time the "
+                "whole card but only be warned once the answer is showing, or give "
+                "the answer its own separate allowance. “Time for the answer” "
+                "applies only to the separate clock.\n\n"
                 "It is drawn by the add-on, so it works on every card in every note "
                 "type — nothing to add to your templates."
             )
@@ -509,7 +525,8 @@ class ConfigDialog(QDialog):
 
         for widget in (self.goal_enabled, self.goal_show_timer):
             widget.toggled.connect(self._sync_goal_enabled)
-        self.alert_style.currentIndexChanged.connect(self._sync_goal_enabled)
+        for combo in (self.alert_style, self.timer_phase):
+            combo.currentIndexChanged.connect(self._sync_goal_enabled)
         return page
 
     def _toolbar_tab(self) -> QWidget:
@@ -566,10 +583,13 @@ class ConfigDialog(QDialog):
         style = self.alert_style.currentData()
         symbol = on and style in ("exclamation", "both")
         for widget in (
-            self.goal_seconds, self.goal_start, self.goal_show_timer,
-            self.alert_style, self.goal_pulse, self.goal_sound,
+            self.goal_seconds, self.timer_phase, self.alert_phase,
+            self.goal_show_timer, self.alert_style, self.goal_pulse, self.goal_sound,
         ):
             widget.setEnabled(on)
+        self.answer_seconds.setEnabled(
+            on and self.timer_phase.currentData() == "separate"
+        )
         for widget in (self.goal_countdown, self.goal_pos, self.goal_scale):
             widget.setEnabled(timer)
         for widget in (self.alert_text, self.alert_pos, self.alert_scale):
@@ -660,7 +680,9 @@ class ConfigDialog(QDialog):
         self.alert_scale.setValue(g["alert_scale"])
         self.goal_pulse.setChecked(g["pulse_when_over"])
         self.goal_sound.setChecked(g["sound"])
-        self._set_combo(self.goal_start, g["start_on"])
+        self._set_combo(self.timer_phase, g["timer_phase"])
+        self.answer_seconds.setValue(g["answer_seconds"])
+        self._set_combo(self.alert_phase, g["alert_phase"])
         self.debug.setChecked(cfg.get("debug", False))
         self._sync_goal_enabled()
 
@@ -752,7 +774,9 @@ class ConfigDialog(QDialog):
                 "alert_scale": self.alert_scale.value(),
                 "pulse_when_over": self.goal_pulse.isChecked(),
                 "sound": self.goal_sound.isChecked(),
-                "start_on": self.goal_start.currentData(),
+                "timer_phase": self.timer_phase.currentData(),
+                "answer_seconds": self.answer_seconds.value(),
+                "alert_phase": self.alert_phase.currentData(),
                 "per_deck_seconds": self.deck_tree.goals(),
             }
         )

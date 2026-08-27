@@ -19,6 +19,7 @@ from .ui import reviewer as RV
 _cfg_cache: Optional[Dict[str, Any]] = None
 _review_snap = None
 _hud_visible = True
+_phase = "question"
 
 
 # ---------------------------------------------------------------------------
@@ -181,62 +182,83 @@ def _refresh_toolbar() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _goal_seconds_for_card(card) -> Optional[float]:
+PHASE_QUESTION = "question"
+PHASE_ANSWER = "answer"
+
+
+def _goal_for_phase(card, phase: str):
+    """What the timer should do on this side of the card.
+
+    Returns ``(seconds, restart, alert_enabled)``. ``seconds`` of ``None``
+    means no timer here; ``restart`` says whether the clock starts fresh, which
+    is what separates "one clock for the whole card" from "a new clock for the
+    answer".
+    """
     cfg = config()
-    if not cfg["goal"]["enabled"]:
-        L.log("goal: turned off in settings")
-        return None
+    goal = cfg["goal"]
+    if not goal["enabled"] or card is None:
+        return None, False, False
+
     did = int(getattr(card, "odid", 0) or card.did)
-    secs = CFG.goal_seconds_for(cfg, did)
-    L.log("goal: deck %s -> %.1fs", did, secs)
-    return secs
+    base = CFG.goal_seconds_for(cfg, did)
+    phase_mode = goal["timer_phase"]
+
+    if phase == PHASE_QUESTION:
+        seconds, restart = (None, False) if phase_mode == "answer" else (base, True)
+    elif phase_mode == "question":
+        seconds, restart = None, False  # the clock ends with the question
+    elif phase_mode == "whole_card":
+        seconds, restart = base, False  # keep the clock that is already running
+    elif phase_mode == "separate":
+        seconds, restart = float(goal["answer_seconds"]), True
+    else:  # "answer"
+        seconds, restart = base, True
+
+    alert_enabled = goal["alert_phase"] in ("always", phase)
+    L.log(
+        "goal %s: deck %s mode=%s -> %s%s alert=%s",
+        phase,
+        did,
+        phase_mode,
+        ("%.1fs" % seconds) if seconds else "no timer",
+        " (restart)" if restart else "",
+        alert_enabled,
+    )
+    return seconds, restart, alert_enabled
 
 
 @L.guard("inject")
-def _inject(card=None) -> None:
+def _inject(card=None, phase: str = PHASE_QUESTION, allow_restart: bool = True) -> None:
     cfg = config()
-    global _review_snap
+    global _review_snap, _phase
+    _phase = phase
     if _review_snap is None:
         _review_snap = build_snapshot(mw.col, cfg, _current_deck_ids())
     else:
         refresh_workload(_review_snap, mw.col, cfg)
-    goal_seconds = _goal_seconds_for_card(card) if card is not None else None
-    payload = RV.build_payload(_review_snap, cfg, SESSION, goal_seconds, _hud_visible)
-    L.log(
-        "inject: goal=%s hud=%s",
-        payload["goal"]["seconds"] if payload["goal"] else None,
-        bool(payload["hud"]),
-    )
+
+    seconds, restart, alert_enabled = _goal_for_phase(card, phase)
     web = getattr(mw.reviewer, "web", None)
     if web is None:
         L.log("inject: no reviewer webview")
         return
+    if restart and allow_restart:
+        # Stamped before the payload so the clock measures the card, not us.
+        web.eval(RV.stamp_script())
+    payload = RV.build_payload(
+        _review_snap, cfg, SESSION, seconds, _hud_visible, alert_enabled
+    )
     web.eval(RV.script(payload))
 
 
 @L.guard("show question")
 def _on_show_question(card) -> None:
-    _stamp_card_start()
-    if config()["goal"]["start_on"] == "answer":
-        # Draw the HUD now, but hold the badge back: passing no card means no
-        # goal in the payload, which hides the badge until the answer is shown.
-        _inject(None)
-        return
-    _inject(card)
+    _inject(card, PHASE_QUESTION)
 
 
 @L.guard("show answer")
 def _on_show_answer(card) -> None:
-    if config()["goal"]["start_on"] == "answer":
-        _stamp_card_start()
-        _inject(card)
-
-
-def _stamp_card_start() -> None:
-    """Mark the moment the card appeared, before any slow work happens."""
-    web = getattr(mw.reviewer, "web", None)
-    if web is not None:
-        web.eval(RV.stamp_script())
+    _inject(card, PHASE_ANSWER)
 
 
 @L.guard("answer card")
@@ -258,6 +280,7 @@ def _on_state_change(new_state: str, old_state: str) -> None:
         SESSION.reset(idle_cutoff_s=float(cfg["speed"]["idle_cutoff_s"]))
         _review_snap = None
         _hud_visible = True
+        globals()["_phase"] = PHASE_QUESTION
     elif old_state == "review" and new_state != "review":
         _review_snap = None
 
@@ -274,7 +297,8 @@ def _on_reviewer_end() -> None:
 def _toggle_hud() -> None:
     global _hud_visible
     _hud_visible = not _hud_visible
-    _inject(getattr(mw.reviewer, "card", None))
+    # Redrawing to show or hide the HUD must never restart the card's clock.
+    _inject(getattr(mw.reviewer, "card", None), _phase, allow_restart=False)
     tooltip("Review Pace HUD %s" % ("shown" if _hud_visible else "hidden"), period=900)
 
 

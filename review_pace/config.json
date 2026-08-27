@@ -89,7 +89,9 @@
     "alert_position": "bottom",
     "alert_text": "!",
     "alert_scale": 1.0,
-    "start_on": "question",
+    "timer_phase": "whole_card",
+    "answer_seconds": 8.0,
+    "alert_phase": "always",
     "pulse_when_over": true,
     "sound": false
   },

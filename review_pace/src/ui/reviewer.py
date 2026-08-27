@@ -127,7 +127,11 @@ _JS = r"""
     badge.style.display = "none";
   }
 
-  var wantAlert = G.alert_style === "exclamation" || G.alert_style === "both";
+  // The warning can be limited to one side of the card, so a timer may run
+  // with no warning attached to it in this phase.
+  var allowAlert = G.alert_enabled;
+  var wantAlert = allowAlert &&
+    (G.alert_style === "exclamation" || G.alert_style === "both");
   if (wantAlert) {
     alert = ensure("rvp-alert");
     alert.textContent = G.alert_text;
@@ -190,13 +194,14 @@ _JS = r"""
       badge.textContent = G.count_down
         ? fmt(target - elapsed, false)
         : fmt(elapsed, true);
-      var recolour = over && (G.alert_style === "badge" || G.alert_style === "both");
+      var recolour = over && allowAlert &&
+        (G.alert_style === "badge" || G.alert_style === "both");
       badge.className = recolour ? (G.pulse ? "rvp-over" : "rvp-over rvp-nopulse") : "";
     }
     if (wantAlert && alert) {
       alert.className = over ? (G.pulse ? "rvp-show rvp-pulsing" : "rvp-show") : "";
     }
-    if (over && !fired) { fired = true; if (G.sound) beep(); }
+    if (over && allowAlert && !fired) { fired = true; if (G.sound) beep(); }
   }
   tick();
   window.__rvpTimer = setInterval(tick, 100);
@@ -243,7 +248,8 @@ def build_hud_html(snap: Snapshot, cfg, session: LiveSession) -> str:
 
 
 def build_payload(snap: Optional[Snapshot], cfg, session: LiveSession,
-                  goal_seconds: Optional[float], hud_visible: bool) -> Dict[str, Any]:
+                  goal_seconds: Optional[float], hud_visible: bool,
+                  alert_enabled: bool = True) -> Dict[str, Any]:
     payload: Dict[str, Any] = {"hud": None, "goal": None}
 
     if cfg["overlay"]["enabled"] and hud_visible and snap is not None:
@@ -264,6 +270,7 @@ def build_payload(snap: Optional[Snapshot], cfg, session: LiveSession,
             "count_down": bool(goal["count_down"]),
             "position": goal["badge_position"],
             "scale": float(goal["scale"]),
+            "alert_enabled": bool(alert_enabled),
             "alert_style": goal["alert_style"],
             "alert_position": goal["alert_position"],
             "alert_text": str(goal["alert_text"]),

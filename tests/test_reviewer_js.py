@@ -198,3 +198,32 @@ def test_every_alert_position_is_pinned_correctly():
         style = json.loads(out.stdout)
         for prop, value in expected.items():
             assert style.get(prop) == value, (position, prop, style)
+
+
+def test_warning_can_be_suppressed_for_this_side_of_the_card():
+    """``alert_enabled`` off means the clock runs but nothing fires."""
+    cfg = C.normalise({"goal": {"enabled": True, "alert_style": "both"}})
+    payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False, alert_enabled=False)
+    script = (
+        HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
+        .replace("OFFSETS_PLACEHOLDER", json.dumps([5000, 15000]))
+    )
+    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    readings = json.loads(out.stdout)
+    assert timers(readings) == ["5", "+5"]      # the clock still runs and reads over
+    assert readings[1]["timerClass"] == ""       # but it never turns red
+    assert readings[1]["alertShown"] is False    # and no symbol appears
+
+
+def test_warning_fires_when_enabled_for_this_side():
+    cfg = C.normalise({"goal": {"enabled": True, "alert_style": "both"}})
+    payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False, alert_enabled=True)
+    script = (
+        HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
+        .replace("OFFSETS_PLACEHOLDER", json.dumps([15000]))
+    )
+    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
+    readings = json.loads(out.stdout)
+    assert "rvp-over" in readings[0]["timerClass"]
+    assert readings[0]["alertShown"] is True
