@@ -44,6 +44,16 @@ def make_snapshot():
     return snap
 
 
+def only(*ids):
+    """A components list that is explicit about every component.
+
+    A component missing from a stored config arrives with the state it ships
+    with, so a test that wants something off has to say so.
+    """
+    return {"display": {"components": [
+        {"id": cid, "enabled": cid in ids} for cid in K.DEFAULT_COMPONENT_ORDER]}}
+
+
 def test_panel_contains_every_enabled_component():
     cfg = C.normalise({"display": {"components": [
         {"id": cid, "enabled": True} for cid in K.DEFAULT_COMPONENT_ORDER]}})
@@ -56,7 +66,7 @@ def test_panel_contains_every_enabled_component():
 
 
 def test_disabled_components_are_absent():
-    cfg = C.normalise({"display": {"components": [{"id": "eta", "enabled": True}]}})
+    cfg = C.normalise(only("eta"))
     html = home.render(make_snapshot(), cfg)
     assert "Time left" in html
     assert "New learned today" not in html
@@ -64,7 +74,7 @@ def test_disabled_components_are_absent():
 
 
 def test_panel_is_empty_when_nothing_is_enabled():
-    cfg = C.normalise({"display": {"components": []}})
+    cfg = C.normalise(only())
     assert home.render(make_snapshot(), cfg) == ""
 
 
@@ -272,3 +282,64 @@ def test_feature_buckets_reach_the_estimate_through_the_config():
                      count_full_learning=cfg["speed"]["count_full_learning"])
     assert est.seconds == 300
     assert "Hard" in est.parts[0].label or "hard" in est.parts[0].label
+
+
+def test_session_summary_appears_then_expires():
+    import time as _t
+
+    from src import session as SESS
+
+    cfg = C.normalise(only("session"))
+    SESS.LAST_SESSION = SESS.SessionSummary(
+        answers=68, seconds=1440, introduced=14, ended_at=_t.time(),
+        per_card=21.0, usual_per_card=24.0,
+    )
+    html = home.render(make_snapshot(), cfg)
+    assert "Just finished" in html and ">68<" in html
+    assert "24m" in html and "21.0s each" in html and "14 new" in html
+    assert "12% faster than usual" in html
+
+    SESS.LAST_SESSION.ended_at = _t.time() - 3 * 3600
+    assert home.render(make_snapshot(), cfg) == ""
+    SESS.LAST_SESSION = SESS.SessionSummary()
+
+
+def test_session_summary_can_be_turned_off_entirely():
+    import time as _t
+
+    from src import session as SESS
+
+    SESS.LAST_SESSION = SESS.SessionSummary(
+        answers=10, seconds=100, ended_at=_t.time(), per_card=10.0, usual_per_card=10.0
+    )
+    cfg = C.normalise(dict(only("session"), **{"display": {
+        "components": [{"id": cid, "enabled": cid == "session"}
+                       for cid in K.DEFAULT_COMPONENT_ORDER],
+        "session_summary_minutes": 0}}))
+    assert home.render(make_snapshot(), cfg) == ""
+    SESS.LAST_SESSION = SESS.SessionSummary()
+
+
+def test_pace_versus_usual_appears_in_the_hud():
+    from src.session import LiveSession
+
+    cfg = C.normalise({})
+    sess = LiveSession()
+    sess.reset(idle_cutoff_s=60)
+    snap = make_snapshot()
+    snap.speeds.overall = S.ClassSpeed(n=500, answer=10, wall=10)
+    for _ in range(6):
+        sess.record(20_000)  # twice the usual pace
+    html = RV.build_hud_html(snap, C.normalise({"speed": {"mode": "answer"}}), sess)
+    assert "vs usual" in html and "+100%" in html
+
+
+def test_pace_versus_usual_waits_for_enough_answers():
+    from src.session import LiveSession
+
+    sess = LiveSession()
+    sess.reset(idle_cutoff_s=60)
+    sess.record(20_000)
+    snap = make_snapshot()
+    snap.speeds.overall = S.ClassSpeed(n=500, answer=10, wall=10)
+    assert "vs usual" not in RV.build_hud_html(snap, C.normalise({}), sess)

@@ -12,6 +12,7 @@ COMP_SPEED = "speed"
 COMP_LEARNED = "learned"
 COMP_DONE = "done_today"
 COMP_BREAKDOWN = "breakdown"
+COMP_SESSION = "session"
 
 COMPONENT_LABELS = {
     COMP_ETA: "Time remaining / ETA",
@@ -20,6 +21,7 @@ COMPONENT_LABELS = {
     COMP_LEARNED: "New cards learned (today / week / month)",
     COMP_DONE: "Done today (reviews & time)",
     COMP_BREAKDOWN: "Speed breakdown by card type",
+    COMP_SESSION: "Summary of the session you just finished",
 }
 
 COMPONENT_HELP = {
@@ -29,9 +31,11 @@ COMPONENT_HELP = {
     COMP_LEARNED: "Cards you saw for the very first time in each period.",
     COMP_DONE: "Reviews answered and time spent since today's rollover.",
     COMP_BREAKDOWN: "Separate speeds for learning, young, mature and relearning cards.",
+    COMP_SESSION: "Appears for a while after you finish studying, then disappears.",
 }
 
 DEFAULT_COMPONENT_ORDER = [
+    COMP_SESSION,
     COMP_ETA,
     COMP_WORKLOAD,
     COMP_SPEED,

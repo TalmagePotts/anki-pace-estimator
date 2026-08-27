@@ -12,6 +12,7 @@ from . import config as CFG
 from . import consts as K
 from . import log as L
 from .collector import CACHE, build_snapshot, refresh_workload
+from . import session as SESSION_MOD
 from .session import SESSION
 from .ui import home
 from .ui import reviewer as RV
@@ -253,6 +254,9 @@ def _inject(card=None, phase: str = PHASE_QUESTION, allow_restart: bool = True) 
 
 @L.guard("show question")
 def _on_show_question(card) -> None:
+    # A card with no repetitions behind it is being seen for the first time.
+    if getattr(card, "reps", 1) == 0:
+        SESSION.note_introduced(card.id)
     _inject(card, PHASE_QUESTION)
 
 
@@ -282,12 +286,41 @@ def _on_state_change(new_state: str, old_state: str) -> None:
         _hud_visible = True
         globals()["_phase"] = PHASE_QUESTION
     elif old_state == "review" and new_state != "review":
+        _finish_session()
         _review_snap = None
+
+
+@L.guard("undo")
+def _on_undo(*_args) -> None:
+    """Take back the last answer when Anki takes back the review."""
+    if mw.state != "review":
+        return
+    if SESSION.undo_last():
+        L.log("undo: session back to %d cards", SESSION.answers)
+
+
+@L.guard("finish session")
+def _finish_session() -> None:
+    """Freeze what the session amounted to, for the congratulations screen."""
+    if not SESSION.answers:
+        return
+    cfg = config()
+    mode = cfg["speed"]["mode"]
+    usual = _review_snap.speeds.overall.pick(mode) if _review_snap else 0.0
+    SESSION_MOD.LAST_SESSION = SESSION_MOD.summarise(SESSION, mode, usual)
+    L.log(
+        "session finished: %d cards in %.0fs (%.1fs each, usual %.1fs)",
+        SESSION.answers,
+        SESSION.active_seconds,
+        SESSION.per_card_for(mode),
+        usual,
+    )
 
 
 @L.guard("reviewer end")
 def _on_reviewer_end() -> None:
     global _review_snap
+    _finish_session()
     _review_snap = None
     web = getattr(mw.reviewer, "web", None)
     if web is not None:
@@ -350,6 +383,7 @@ def install() -> None:
     gui_hooks.reviewer_will_end.append(_on_reviewer_end)
     gui_hooks.state_did_change.append(_on_state_change)
     gui_hooks.state_shortcuts_will_change.append(_on_shortcuts)
+    gui_hooks.state_did_undo.append(_on_undo)
 
     gui_hooks.profile_did_open.append(_on_profile_open)
     if getattr(mw, "form", None) is not None:

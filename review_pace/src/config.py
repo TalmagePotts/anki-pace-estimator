@@ -61,6 +61,8 @@ DEFAULTS: Dict[str, Any] = {
         "accent": "",  # "" follows Anki's theme accent
         "font_scale": 1.0,
         "period_mode": "rolling",  # "rolling" or "calendar"
+        # How long the finished-session summary stays on the home screen.
+        "session_summary_minutes": 20,
         # Which seconds-per-card figure the home screen leads with.
         "speed_display": "mean",  # "mean", "typical" or "both"
         "title": "Review Pace",
@@ -81,6 +83,7 @@ DEFAULTS: Dict[str, Any] = {
         "show_session_speed": True,
         "show_progress_bar": True,
         "show_elapsed": False,
+        "show_pace_vs_normal": True,
         "hotkey": "Shift+P",
         "scale": 1.0,
     },
@@ -156,9 +159,13 @@ def normalise(stored: Any) -> Dict[str, Any]:
         if cid in DEFAULT_COMPONENT_ORDER and cid not in seen:
             seen.append(cid)
             cleaned.append({"id": cid, "enabled": bool(entry.get("enabled", True))})
+    # A component this add-on gained since the config was written arrives with
+    # the state it ships with, not switched off -- otherwise every new feature
+    # would be invisible to existing users.
+    ships_enabled = {c["id"]: c["enabled"] for c in DEFAULTS["display"]["components"]}
     for cid in DEFAULT_COMPONENT_ORDER:
         if cid not in seen:
-            cleaned.append({"id": cid, "enabled": False})
+            cleaned.append({"id": cid, "enabled": ships_enabled.get(cid, False)})
     cfg["display"]["components"] = cleaned
 
     sp = cfg["speed"]
@@ -183,6 +190,7 @@ def normalise(stored: Any) -> Dict[str, Any]:
     sp["features"] = seen
 
     disp = cfg["display"]
+    disp["session_summary_minutes"] = max(0, min(1440, disp["session_summary_minutes"]))
     if disp["speed_display"] not in ("mean", "typical", "both"):
         disp["speed_display"] = "mean"
     disp["font_scale"] = max(0.7, min(2.0, float(disp["font_scale"])))

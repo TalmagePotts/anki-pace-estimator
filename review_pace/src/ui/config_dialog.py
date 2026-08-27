@@ -308,6 +308,10 @@ class ConfigDialog(QDialog):
         self.speed_display.addItem("Average per card", "mean")
         self.speed_display.addItem("Typical card (median)", "typical")
         self.speed_display.addItem("Average, with the typical card underneath", "both")
+        self.session_minutes = QSpinBox()
+        self.session_minutes.setRange(0, 1440)
+        self.session_minutes.setSuffix(" min")
+        self.session_minutes.setSpecialValueText("Never show it")
         self.period_mode = QComboBox()
         self.period_mode.addItem("Rolling (last 7 / 30 days)", "rolling")
         self.period_mode.addItem("Calendar (this week / this month)", "calendar")
@@ -324,6 +328,7 @@ class ConfigDialog(QDialog):
         form.addRow("Columns", self.columns)
         form.addRow("Text size", self.font_scale)
         form.addRow("Show speed as", self.speed_display)
+        form.addRow("Keep the session summary for", self.session_minutes)
         form.addRow("Week / month", self.period_mode)
         form.addRow("Accent colour", self.accent)
         lay.addLayout(form)
@@ -412,6 +417,7 @@ class ConfigDialog(QDialog):
         self.overlay_eta = QCheckBox("Time remaining")
         self.overlay_speed = QCheckBox("This session's pace")
         self.overlay_elapsed = QCheckBox("Time spent this session")
+        self.overlay_vs_normal = QCheckBox("How today compares to your usual pace")
         self.overlay_bar = QCheckBox("Progress bar")
         self.overlay_pos = QComboBox()
         for pos in K.OVERLAY_POSITIONS:
@@ -429,6 +435,7 @@ class ConfigDialog(QDialog):
         hform.addRow("", self.overlay_eta)
         hform.addRow("", self.overlay_speed)
         hform.addRow("", self.overlay_elapsed)
+        hform.addRow("", self.overlay_vs_normal)
         hform.addRow("", self.overlay_bar)
         hform.addRow("Corner", self.overlay_pos)
         hform.addRow("Opacity", self.overlay_opacity)
@@ -639,6 +646,7 @@ class ConfigDialog(QDialog):
         self.font_scale.setValue(d["font_scale"])
         self.accent.setText(d["accent"])
         self._set_combo(self.speed_display, d["speed_display"])
+        self.session_minutes.setValue(d["session_summary_minutes"])
         self._set_combo(self.period_mode, d["period_mode"])
 
         s = cfg["speed"]
@@ -661,6 +669,7 @@ class ConfigDialog(QDialog):
         self.overlay_eta.setChecked(o["show_eta"])
         self.overlay_speed.setChecked(o["show_session_speed"])
         self.overlay_elapsed.setChecked(o["show_elapsed"])
+        self.overlay_vs_normal.setChecked(o["show_pace_vs_normal"])
         self.overlay_bar.setChecked(o["show_progress_bar"])
         self._set_combo(self.overlay_pos, o["position"])
         self.overlay_opacity.setValue(o["opacity"])
@@ -722,6 +731,7 @@ class ConfigDialog(QDialog):
                 "font_scale": self.font_scale.value(),
                 "accent": self.accent.text().strip(),
                 "speed_display": self.speed_display.currentData(),
+                "session_summary_minutes": self.session_minutes.value(),
                 "period_mode": self.period_mode.currentData(),
             }
         )
@@ -753,6 +763,7 @@ class ConfigDialog(QDialog):
                 "show_eta": self.overlay_eta.isChecked(),
                 "show_session_speed": self.overlay_speed.isChecked(),
                 "show_elapsed": self.overlay_elapsed.isChecked(),
+                "show_pace_vs_normal": self.overlay_vs_normal.isChecked(),
                 "show_progress_bar": self.overlay_bar.isChecked(),
                 "position": self.overlay_pos.currentData(),
                 "opacity": self.overlay_opacity.value(),

@@ -209,6 +209,10 @@ _JS = r"""
 """
 
 
+#: Too few answers and the comparison is noise rather than a signal.
+MIN_ANSWERS_FOR_COMPARISON = 5
+
+
 def _row(key: str, value: str) -> str:
     return '<div class="rvp-row"><span class="rvp-k">%s</span>' '<span class="rvp-v">%s</span></div>' % (
         key,
@@ -235,6 +239,12 @@ def build_hud_html(snap: Snapshot, cfg, session: LiveSession) -> str:
             )
     if ov["show_session_speed"] and session.answers:
         rows.append(_row("pace", K.fmt_secs_per_card(session.per_card_for(mode))))
+    if ov["show_pace_vs_normal"] and session.answers >= MIN_ANSWERS_FOR_COMPARISON:
+        usual = snap.speeds.overall.pick(mode)
+        live = session.per_card_for(mode)
+        if usual > 0 and live > 0:
+            pct = (live / usual - 1.0) * 100.0
+            rows.append(_row("vs usual", "%+.0f%%" % pct))
     if ov["show_elapsed"] and session.answers:
         rows.append(_row("spent", K.fmt_duration(session.active_seconds)))
 

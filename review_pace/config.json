@@ -21,6 +21,10 @@
   "display": {
     "components": [
       {
+        "id": "session",
+        "enabled": true
+      },
+      {
         "id": "eta",
         "enabled": true
       },
@@ -55,6 +59,7 @@
     "accent": "",
     "font_scale": 1.0,
     "period_mode": "rolling",
+    "session_summary_minutes": 20,
     "speed_display": "mean",
     "title": "Review Pace",
     "show_title": true
@@ -74,6 +79,7 @@
     "show_session_speed": true,
     "show_progress_bar": true,
     "show_elapsed": false,
+    "show_pace_vs_normal": true,
     "hotkey": "Shift+P",
     "scale": 1.0
   },

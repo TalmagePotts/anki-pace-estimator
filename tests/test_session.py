@@ -77,3 +77,79 @@ def test_scaling_keeps_the_spread_fields():
     assert doubled.overall.wall_sd == 6
     assert doubled.per_class[S.MATURE].answer_sd == 4
     assert doubled.day_cv == 0.2
+
+
+def test_undo_takes_back_the_last_answer():
+    s = LiveSession()
+    s.reset(idle_cutoff_s=60)
+    s.record(5000)
+    s.record(7000)
+    before = s.answers, round(s.answer_seconds, 3)
+    s.record(9000)
+    assert s.undo_last() is True
+    assert (s.answers, round(s.answer_seconds, 3)) == before
+    # The gap across an undo is not real study time, so the next answer starts
+    # a fresh stretch.
+    assert s.last_answer_at is None
+
+
+def test_undo_with_nothing_to_undo_is_harmless():
+    s = LiveSession()
+    s.reset()
+    assert s.undo_last() is False
+    assert s.answers == 0
+    assert s.active_seconds == 0.0
+
+
+def test_undo_never_drives_totals_negative():
+    s = LiveSession()
+    s.reset()
+    s.record(4000)
+    s.undo_last()
+    s.undo_last()
+    assert s.answers == 0
+    assert s.active_seconds >= 0.0
+
+
+def test_introduced_cards_are_counted_once():
+    s = LiveSession()
+    s.reset()
+    for _ in range(3):
+        s.note_introduced(77)   # the same new card across its learning steps
+    s.note_introduced(78)
+    assert len(s.introduced) == 2
+
+
+def test_summary_compares_against_the_usual_pace():
+    from src.session import summarise
+
+    s = LiveSession()
+    s.reset(idle_cutoff_s=60)
+    for _ in range(4):
+        s.record(10_000)
+    s.note_introduced(1)
+    summary = summarise(s, "answer", usual=20.0)
+    assert summary.answers == 4
+    assert summary.introduced == 1
+    assert abs(summary.per_card - 10.0) < 0.01
+    assert abs(summary.pct_vs_usual + 50.0) < 0.01   # twice as fast
+    assert summary.has_comparison is True
+
+
+def test_summary_without_history_has_no_comparison():
+    from src.session import summarise
+
+    s = LiveSession()
+    s.reset()
+    s.record(5000)
+    summary = summarise(s, "wall", usual=0.0)
+    assert summary.has_comparison is False
+    assert summary.pct_vs_usual == 0.0
+
+
+def test_summary_freshness_expires():
+    from src.session import SessionSummary
+
+    assert SessionSummary(answers=5, ended_at=time.time()).is_fresh(600) is True
+    assert SessionSummary(answers=5, ended_at=time.time() - 3600).is_fresh(600) is False
+    assert SessionSummary(answers=0, ended_at=time.time()).is_fresh(600) is False

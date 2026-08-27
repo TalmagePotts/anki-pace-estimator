@@ -177,7 +177,74 @@ def gather_workload(col, cfg, selected: Sequence[int]) -> Tuple[S.Workload, List
         # still owes more than one answer. ``cards.left % 1000`` is exactly the
         # number of answers Anki still expects from it.
         work.learning_reps = _remaining_learning_reps(col, cfg, work.learning_reps)
+
+    extra_new, extra_review, extra_reps = filtered_workload(
+        col, set(cfg.get("_expanded_ids") or [])
+    )
+    if extra_new or extra_review or extra_reps:
+        work.new_cards += extra_new
+        work.review_cards += extra_review
+        work.learning_reps += extra_reps
+        lines.append(
+            DeckLine(0, "Custom study", extra_new, extra_reps, extra_review)
+        )
     return work, lines
+
+
+# Anki queue numbers.
+QUEUE_NEW = 0
+QUEUE_LEARN = 1
+QUEUE_REVIEW = 2
+QUEUE_DAY_LEARN = 3
+QUEUE_PREVIEW = 4
+
+
+def classify_filtered(rows, today: int, now_secs: int) -> Tuple[int, int, int]:
+    """Turn rows of ``(queue, due, left)`` into ``(new, review, learning_reps)``.
+
+    Cards pulled into a filtered deck by Custom Study still belong to their
+    home deck, but Anki's deck tree files them under the filtered deck, so a
+    selection would stop counting them mid-session. They are counted here
+    instead. ``due`` is an epoch timestamp for intraday queues and a day number
+    for the rest, which is why the two are compared against different clocks.
+    """
+    new = review = reps = 0
+    for queue, due, left in rows:
+        queue = int(queue)
+        due = int(due or 0)
+        if queue == QUEUE_NEW:
+            new += 1
+        elif queue in (QUEUE_LEARN, QUEUE_PREVIEW):
+            if due <= now_secs:
+                reps += _steps_left(left) if queue == QUEUE_LEARN else 1
+        elif queue == QUEUE_DAY_LEARN:
+            if due <= today:
+                reps += _steps_left(left)
+        elif queue == QUEUE_REVIEW:
+            if due <= today:
+                review += 1
+    return new, review, reps
+
+
+def _steps_left(left) -> int:
+    steps = int(left or 0) % 1000
+    return steps if steps > 0 else 1
+
+
+def filtered_workload(col, expanded: Set[int]) -> Tuple[int, int, int]:
+    """Counts for cards of the selected decks that are sitting in a filtered deck."""
+    if not expanded:
+        return 0, 0, 0
+    try:
+        rows = col.db.all(
+            "select queue, due, left from cards where odid != 0 and odid in %s"
+            % _sql_id_list(sorted(expanded))
+        )
+    except Exception:
+        return 0, 0, 0
+    if not rows:
+        return 0, 0, 0
+    return classify_filtered(rows, int(col.sched.today), int(time.time()))
 
 
 def _remaining_learning_reps(col, cfg, fallback: int) -> int:

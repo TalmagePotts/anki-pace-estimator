@@ -176,3 +176,13 @@ def test_old_start_on_question_keeps_the_whole_card_clock():
 def test_answer_seconds_is_clamped():
     assert C.normalise({"goal": {"answer_seconds": 0}})["goal"]["answer_seconds"] == 1.0
     assert C.normalise({"goal": {"answer_seconds": 9999}})["goal"]["answer_seconds"] == 600.0
+
+
+def test_a_newly_added_component_arrives_switched_on():
+    # Otherwise every feature added after a user's config was written would be
+    # invisible to them.
+    cfg = C.normalise({"display": {"components": [{"id": "eta", "enabled": True}]}})
+    states = {c["id"]: c["enabled"] for c in cfg["display"]["components"]}
+    assert states["session"] is True
+    assert states["breakdown"] is False  # ships off, stays off
+    assert list(states)[0] == "eta"      # the user's ordering is still respected

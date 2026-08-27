@@ -79,6 +79,38 @@ def _done_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     return [T.tile(str(t.reviews), "Answered today", sub, "review")], []
 
 
+def _session_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
+    """What you just did, shown while it is still the thing on your mind."""
+    from ..session import LAST_SESSION
+
+    minutes = int(cfg["display"]["session_summary_minutes"])
+    if not minutes or not LAST_SESSION.is_fresh(minutes * 60):
+        return [], []
+
+    last = LAST_SESSION
+    bits = [K.fmt_duration(last.seconds)]
+    if last.per_card:
+        bits.append("%.1fs each" % last.per_card)
+    if last.introduced:
+        bits.append("%d new" % last.introduced)
+    tiles = [T.tile(str(last.answers), "Just finished", " · ".join(bits), "review")]
+
+    chips = []
+    if last.has_comparison:
+        pct = last.pct_vs_usual
+        if abs(pct) < 5:
+            chips.append(T.chip("This session", "right on your usual pace"))
+        else:
+            faster = pct < 0
+            chips.append(
+                T.chip(
+                    "This session",
+                    "%.0f%% %s than usual" % (abs(pct), "faster" if faster else "slower"),
+                )
+            )
+    return tiles, chips
+
+
 def _breakdown_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
     if not snap.has_speed_data:
         return [], []
@@ -99,6 +131,7 @@ def _breakdown_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
 
 
 BUILDERS = {
+    K.COMP_SESSION: _session_component,
     K.COMP_ETA: _eta_component,
     K.COMP_WORKLOAD: _workload_component,
     K.COMP_SPEED: _speed_component,
