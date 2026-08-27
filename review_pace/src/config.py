@@ -33,6 +33,11 @@ DEFAULTS: Dict[str, Any] = {
         # Backtesting found these change accuracy by well under a percentage
         # point, so they are off by default -- but they are yours to turn on.
         "features": [],  # any of "ease", "interval"
+        # Adjust the estimate for the hour you are studying in. Only hours seen
+        # on several separate days are allowed to move it -- see stats.py.
+        "time_of_day": True,
+        "time_of_day_shrinkage": 50,
+        "time_of_day_min_days": 5,
         # Fourteen days, not thirty: backtesting against real review history
         # showed a shorter window tracks your current pace noticeably better.
         "lookback_days": 14,
@@ -174,6 +179,8 @@ def normalise(stored: Any) -> Dict[str, Any]:
     sp["max_answer_s"] = max(5, min(600, sp["max_answer_s"]))
     sp["max_rows"] = max(500, min(1000000, sp["max_rows"]))
     sp["min_sample"] = max(0, min(100000, sp["min_sample"]))
+    sp["time_of_day_shrinkage"] = max(0, min(10000, sp["time_of_day_shrinkage"]))
+    sp["time_of_day_min_days"] = max(1, min(365, sp["time_of_day_min_days"]))
     if sp["mode"] not in ("wall", "answer"):
         sp["mode"] = "wall"
     # "aggregate" was the old name and defaulted to the median, which

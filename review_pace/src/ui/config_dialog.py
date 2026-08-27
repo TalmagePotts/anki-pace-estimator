@@ -382,8 +382,18 @@ class ConfigDialog(QDialog):
         form.addRow("", self.include_lapses)
         form.addRow("Estimates built from", self.estimator)
 
+        self.time_of_day = QCheckBox("Adjust the estimate for the time of day")
+        self.tod_min_days = QSpinBox()
+        self.tod_min_days.setRange(1, 365)
+        self.tod_min_days.setSuffix(" days")
+        self.tod_shrinkage = QSpinBox()
+        self.tod_shrinkage.setRange(0, 10000)
+        self.tod_shrinkage.setSingleStep(10)
         self.feature_ease = QCheckBox("Ease factor (hard / normal / easy cards)")
         self.feature_interval = QCheckBox("Interval (how far apart the card is scheduled)")
+        form.addRow("", self.time_of_day)
+        form.addRow("An hour must span", self.tod_min_days)
+        form.addRow("Samples before an hour is believed", self.tod_shrinkage)
         form.addRow("Also split speeds by", self.feature_ease)
         form.addRow("", self.feature_interval)
         form.addRow("Look back over", self.lookback)
@@ -400,7 +410,12 @@ class ConfigDialog(QDialog):
                 "of the time and a median discards that tail. The extra splits above "
                 "changed accuracy by well under a point — day-to-day variation "
                 "dominates — so they are off by default. A split falls back to its "
-                "card type until it has enough samples to stand on its own."
+                "card type until it has enough samples to stand on its own.\n\n"
+                "Time of day is worth a little, but only with the guard above: "
+                "hourly averages are mostly a record of which days you studied in "
+                "which hours, so an hour has to appear on several separate days "
+                "before it may move an estimate. Tools ▸ Review Pace shows every "
+                "hour and whether it qualified."
             )
         )
         lay.addStretch(1)
@@ -656,6 +671,9 @@ class ConfigDialog(QDialog):
         self.full_learning.setChecked(s["count_full_learning"])
         self.include_lapses.setChecked(s["include_lapses"])
         self._set_combo(self.estimator, s["estimator"])
+        self.time_of_day.setChecked(s["time_of_day"])
+        self.tod_min_days.setValue(s["time_of_day_min_days"])
+        self.tod_shrinkage.setValue(s["time_of_day_shrinkage"])
         self.feature_ease.setChecked("ease" in s["features"])
         self.feature_interval.setChecked("interval" in s["features"])
         self.lookback.setValue(s["lookback_days"])
@@ -742,6 +760,9 @@ class ConfigDialog(QDialog):
                 "count_full_learning": self.full_learning.isChecked(),
                 "include_lapses": self.include_lapses.isChecked(),
                 "estimator": self.estimator.currentData(),
+                "time_of_day": self.time_of_day.isChecked(),
+                "time_of_day_min_days": self.tod_min_days.value(),
+                "time_of_day_shrinkage": self.tod_shrinkage.value(),
                 "features": [
                     name
                     for name, box in (

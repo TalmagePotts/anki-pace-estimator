@@ -384,7 +384,17 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
     snap.sample_size = len(timed)
 
     features = tuple(cfg["speed"]["features"])
-    snap.speeds = S.compute_speeds(timed, cfg["speed"]["estimator"], features)
+    snap.speeds = S.compute_speeds(
+        timed,
+        cfg["speed"]["estimator"],
+        features,
+        hour_shrinkage=(
+            float(cfg["speed"]["time_of_day_shrinkage"])
+            if cfg["speed"]["time_of_day"]
+            else None
+        ),
+        hour_min_days=int(cfg["speed"]["time_of_day_min_days"]),
+    )
     if not cfg["speed"]["per_card_class"]:
         # Collapse to a single figure by making every class defer to the
         # overall average.
@@ -402,6 +412,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
         mode=cfg["speed"]["mode"],
         count_full_learning=cfg["speed"]["count_full_learning"],
         include_lapses=cfg["speed"]["include_lapses"],
+        start_epoch=time.time(),
     )
 
     mode = cfg["speed"]["mode"]
@@ -464,6 +475,7 @@ def _fill_per_deck_estimates(snap: Snapshot, cfg) -> None:
             mode=cfg["speed"]["mode"],
             count_full_learning=cfg["speed"]["count_full_learning"],
             include_lapses=cfg["speed"]["include_lapses"],
+            start_epoch=time.time(),
         )
         line.seconds = est.seconds
     snap.per_deck.sort(key=lambda l: l.seconds, reverse=True)
@@ -530,6 +542,7 @@ def refresh_workload(snap: Snapshot, col, cfg) -> Snapshot:
         mode=cfg["speed"]["mode"],
         count_full_learning=cfg["speed"]["count_full_learning"],
         include_lapses=cfg["speed"]["include_lapses"],
+        start_epoch=time.time(),
     )
     _fill_per_deck_estimates(snap, cfg)
     return snap

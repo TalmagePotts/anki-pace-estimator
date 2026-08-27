@@ -360,3 +360,93 @@ def test_unknown_features_are_ignored():
     rows = [rev(i * 8, 5, S.RT_REVIEW, ivl=100, cid=i) for i in range(30)]
     sp = S.compute_speeds(S.annotate(rows), "mean", ["ease", "astrology"])
     assert sp.features == ("ease",)
+
+
+# ---------------------------------------------------------------------------
+# Time of day
+# ---------------------------------------------------------------------------
+
+HOUR_MS = 3_600_000
+DAY_MS = 86_400_000
+
+
+def at(day, hour, secs, cid):
+    """A review on a given day and hour, taking ``secs``."""
+    # Days are counted from the epoch, whose local hour offset does not matter
+    # here because every helper goes through the same conversion.
+    base = day * DAY_MS + hour * HOUR_MS
+    return S.Review(base + cid * 1000, cid, 1, 3, 100, 100, int(secs * 1000),
+                    S.RT_REVIEW, 2500)
+
+
+def test_hour_speeds_count_distinct_days():
+    rows = [at(5, 9, 10, i) for i in range(30)] + [at(6, 9, 10, 100 + i) for i in range(30)]
+    speeds, days = S.compute_hour_speeds(S.annotate(rows, idle_cutoff_s=0.5), "mean")
+    hour = S.local_hour(rows[0].id)
+    assert speeds[hour].n == 60
+    assert days[hour] == 2
+
+
+def test_an_hour_seen_on_too_few_days_is_not_used():
+    # One very long session is a day, not an hour, and must not move anything.
+    hour_speeds = {3: S.ClassSpeed(n=500, answer=30, wall=30)}
+    overall = S.ClassSpeed(n=1000, answer=10, wall=10)
+    assert S.hour_factors_from(hour_speeds, overall, "wall", 50, {3: 1}, min_days=5) == {}
+    used = S.hour_factors_from(hour_speeds, overall, "wall", 50, {3: 20}, min_days=5)
+    assert used and used[3] > 1
+
+
+def test_shrinkage_pulls_a_thin_hour_toward_no_effect():
+    overall = S.ClassSpeed(n=1000, answer=10, wall=10)
+    thin = {1: S.ClassSpeed(n=10, answer=20, wall=20)}     # looks twice as slow
+    thick = {1: S.ClassSpeed(n=5000, answer=20, wall=20)}  # same, far more data
+    days = {1: 30}
+    thin_f = S.hour_factors_from(thin, overall, "wall", 50, days, 5)[1]
+    thick_f = S.hour_factors_from(thick, overall, "wall", 50, days, 5)[1]
+    assert 1.0 < thin_f < thick_f <= 2.0
+    assert abs(thick_f - 2.0) < 0.05     # believed almost entirely
+    assert abs(thin_f - 1.17) < 0.05     # barely believed at all
+
+
+def test_no_shrinkage_means_the_raw_ratio():
+    overall = S.ClassSpeed(n=1000, answer=10, wall=10)
+    hours = {1: S.ClassSpeed(n=10, answer=20, wall=20)}
+    assert S.hour_factors_from(hours, overall, "wall", 0, {1: 9}, 5)[1] == 2.0
+
+
+def test_hour_factors_need_a_baseline():
+    assert S.hour_factors_from({1: S.ClassSpeed(n=99, wall=5)}, S.ClassSpeed(), "wall") == {}
+
+
+def test_stretch_spreads_work_across_hour_boundaries():
+    import time as _t
+
+    # Start exactly on the hour so the arithmetic is checkable by hand.
+    start = _t.mktime((2026, 6, 1, 10, 0, 0, 0, 0, -1))
+    # An hour of work at 2x, then the next hour is normal: the first 30 minutes
+    # of nominal work fills the whole 10:00 hour.
+    factors = {10: 2.0, 11: 1.0}
+    assert abs(S.stretch_over_hours(1800, start, factors) - 3600) < 1
+    # Half that work fits inside the slow hour and simply doubles.
+    assert abs(S.stretch_over_hours(900, start, factors) - 1800) < 1
+    # More than the slow hour can absorb spills into the normal one.
+    assert abs(S.stretch_over_hours(2400, start, factors) - (3600 + 600)) < 1
+
+
+def test_stretch_is_a_no_op_without_factors():
+    assert S.stretch_over_hours(500, 0, {}) == 500
+    assert S.stretch_over_hours(0, 0, {5: 2.0}) == 0
+
+
+def test_estimate_applies_hour_factors_only_when_given_a_clock():
+    import time as _t
+
+    start = _t.mktime((2026, 6, 1, 10, 0, 0, 0, 0, -1))
+    speeds = S.Speeds(overall=S.ClassSpeed(n=999, answer=10, wall=10))
+    work = S.Workload(review_cards=60)  # 600 nominal seconds
+    beh = S.Behaviour(lapse_rate=0.0)
+    assert S.estimate(work, speeds, beh, start_epoch=start).seconds == 600
+
+    speeds.hour_factors = {10: 2.0, 11: 2.0}
+    assert S.estimate(work, speeds, beh).seconds == 600  # no clock, no effect
+    assert abs(S.estimate(work, speeds, beh, start_epoch=start).seconds - 1200) < 1

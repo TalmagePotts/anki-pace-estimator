@@ -9,6 +9,7 @@ collection into the plain dataclasses defined here.
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -312,6 +313,14 @@ class Speeds:
     #: Empty unless extra features are switched on.
     per_key: Dict[tuple, ClassSpeed] = field(default_factory=dict)
     features: Tuple[str, ...] = ()
+    #: Speed measured in each hour of the day, for the analysis view. Always
+    #: populated; it is only *used* when hour factors are switched on.
+    hour_speeds: Dict[int, ClassSpeed] = field(default_factory=dict)
+    #: How many *distinct days* each hour was studied on. An hour seen on one
+    #: long day is that day, not that hour.
+    hour_days: Dict[int, int] = field(default_factory=dict)
+    #: Multipliers applied to the estimate per hour. Empty when switched off.
+    hour_factors: Dict[int, float] = field(default_factory=dict)
 
     def for_class(self, cls: str) -> ClassSpeed:
         """Speed for a class, falling back to the overall figure when a class
@@ -341,6 +350,23 @@ MIN_SAMPLES = 20
 
 #: Percentile used for the pessimistic end of the ETA range.
 SLOW_PCT = 80.0
+
+#: Pulls a thinly-sampled hour back toward "no effect". An hour needs about
+#: this many reviews before half of its apparent difference is believed.
+DEFAULT_HOUR_SHRINKAGE = 50
+
+#: An hour must have been studied on at least this many separate days before it
+#: is allowed to move an estimate.
+#:
+#: This guard matters more than the shrinkage does. Hourly averages look
+#: dramatic -- on the collection this was tuned against, 5pm appeared 85%
+#: slower than midnight -- but most of that gap is *which days* those hours
+#: happened to fall on, not the hours themselves. Comparing hours only against
+#: other hours of the same day shrinks the spread from 85% to about 10%.
+#: Without this requirement, applying hourly factors made estimates worse
+#: (28.3% average error against 26.7% for ignoring the clock entirely); with
+#: it, they improve slightly (26.2%) and the bias roughly halves.
+DEFAULT_HOUR_MIN_DAYS = 5
 
 
 def stdev(values: Sequence[float]) -> float:
@@ -401,6 +427,8 @@ def compute_speeds(
     timed: Sequence[TimedReview],
     method: str = "mean",
     features: Sequence[str] = (),
+    hour_shrinkage: Optional[float] = None,
+    hour_min_days: int = DEFAULT_HOUR_MIN_DAYS,
 ) -> Speeds:
     features = tuple(f for f in features if f in ALL_FEATURES)
     buckets: Dict[str, List[TimedReview]] = {c: [] for c in CLASSES}
@@ -426,7 +454,103 @@ def compute_speeds(
     if total_wall > 0:
         speeds.overhead_ratio = sum(t.overhead_s for t in usable) / total_wall
     speeds.day_cv = day_variation(usable)
+    speeds.hour_speeds, speeds.hour_days = compute_hour_speeds(usable, method)
+    if hour_shrinkage is not None:
+        speeds.hour_factors = hour_factors_from(
+            speeds.hour_speeds,
+            speeds.overall,
+            "wall",
+            hour_shrinkage,
+            speeds.hour_days,
+            hour_min_days,
+        )
     return speeds
+
+
+# ---------------------------------------------------------------------------
+# Time of day
+# ---------------------------------------------------------------------------
+
+def local_hour(epoch_ms_or_s: float, milliseconds: bool = True) -> int:
+    seconds = epoch_ms_or_s / 1000.0 if milliseconds else epoch_ms_or_s
+    return time.localtime(seconds).tm_hour
+
+
+def compute_hour_speeds(
+    timed: Sequence[TimedReview], method: str
+) -> Tuple[Dict[int, ClassSpeed], Dict[int, int]]:
+    """Speed in each hour of the day, and how many days each hour spans."""
+    buckets: Dict[int, List[TimedReview]] = {}
+    days: Dict[int, set] = {}
+    for t in timed:
+        if classify(t.review) is None:
+            continue
+        hour = local_hour(t.review.id)
+        buckets.setdefault(hour, []).append(t)
+        days.setdefault(hour, set()).add(t.review.id // 86_400_000)
+    return (
+        {h: _class_speed(v, method) for h, v in buckets.items()},
+        {h: len(v) for h, v in days.items()},
+    )
+
+
+def hour_factors_from(
+    hour_speeds: Dict[int, ClassSpeed],
+    overall: ClassSpeed,
+    mode: str,
+    shrinkage: float = DEFAULT_HOUR_SHRINKAGE,
+    hour_days: Optional[Dict[int, int]] = None,
+    min_days: int = DEFAULT_HOUR_MIN_DAYS,
+) -> Dict[int, float]:
+    """Per-hour multipliers, pulled toward 1 in proportion to the evidence.
+
+    Twenty-four buckets is a lot to carve a review history into, and an hour
+    you have studied in twice should not be allowed to move an estimate. The
+    shrinkage term is what stops that: an hour with ``shrinkage`` samples gets
+    half the difference it appears to have, and one with far more gets nearly
+    all of it.
+    """
+    base = overall.pick(mode)
+    if base <= 0:
+        return {}
+    factors = {}
+    for hour, cs in hour_speeds.items():
+        if not cs.n:
+            continue
+        if min_days and (hour_days or {}).get(hour, 0) < min_days:
+            continue  # one long night is a day, not an hour
+        raw = cs.pick(mode) / base
+        weight = cs.n / (cs.n + shrinkage) if (cs.n + shrinkage) else 0.0
+        factors[hour] = 1.0 + (raw - 1.0) * weight
+    return factors
+
+
+def stretch_over_hours(
+    seconds: float, start_epoch: float, factors: Dict[int, float]
+) -> float:
+    """Spread a workload forward from ``start_epoch``, hour by hour.
+
+    A long session runs through hours you are quicker or slower in, so the
+    work is walked forward across hour boundaries rather than priced entirely
+    at the hour it began in.
+    """
+    if seconds <= 0 or not factors:
+        return seconds
+    remaining = seconds
+    clock = float(start_epoch)
+    elapsed = 0.0
+    # A session cannot sensibly run past a day; the guard also bounds the loop.
+    for _ in range(48):
+        factor = max(0.1, factors.get(local_hour(clock, milliseconds=False), 1.0))
+        lt = time.localtime(clock)
+        to_boundary = 3600 - (lt.tm_min * 60 + lt.tm_sec)
+        capacity = to_boundary / factor  # nominal work this hour can absorb
+        if remaining <= capacity:
+            return elapsed + remaining * factor
+        remaining -= capacity
+        elapsed += to_boundary
+        clock += to_boundary
+    return elapsed + remaining
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +617,7 @@ def estimate(
     mode: str = "wall",
     count_full_learning: bool = True,
     include_lapses: bool = True,
+    start_epoch: Optional[float] = None,
 ) -> Estimate:
     """Turn a workload into an ETA.
 
@@ -562,9 +687,13 @@ def estimate(
     total = sum(p.seconds for p in parts)
     day_swing = total * speeds.day_cv
     spread = math.sqrt(variance + day_swing * day_swing)
+    slow = total + Z80 * spread
+    if speeds.hour_factors and start_epoch is not None:
+        total = stretch_over_hours(total, start_epoch, speeds.hour_factors)
+        slow = stretch_over_hours(slow, start_epoch, speeds.hour_factors)
     return Estimate(
         seconds=total,
-        seconds_slow=total + Z80 * spread,
+        seconds_slow=slow,
         total_reps=sum(p.reps for p in parts),
         parts=parts,
     )

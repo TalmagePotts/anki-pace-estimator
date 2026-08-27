@@ -68,6 +68,33 @@ None of the above is hard-coded. Under **Speed & accuracy**:
 Under **Home screen**, **Show speed as** picks whether the panel leads with the
 average, the typical (median) card, or the average with the typical underneath.
 
+### Time of day
+
+Hourly averages are the most misleading statistic in this whole add-on. On the
+test collection the slowest hour looked 85% worse than the fastest -- but
+comparing hours only against *other hours of the same day*, which removes "that
+was simply a slow day", collapses that spread to about 10%. The apparent hour
+effect is mostly a record of which days you happened to study in which hours.
+Splitting a history into 24 buckets also leaves each one thin, and the pattern
+is not stable: correlation between the first and second halves of one history
+was only +0.31.
+
+So the estimate does adjust for the clock, but carefully. An hour must have
+been studied on at least five separate days before it may move anything, and
+its measured difference is then scaled back in proportion to how much data
+supports it. Backtested:
+
+| Hour adjustment | Bias | Average error |
+|---|---|---|
+| Ignored entirely | +1.7% | 26.7% |
+| Applied, no day requirement | +2.0% | 28.3% |
+| **Applied, five-day requirement** | **+0.8%** | **26.2%** |
+
+Without the guard it makes estimates *worse* than ignoring the clock. With it,
+it helps a little and roughly halves the bias. **Tools ▸ Review Pace** lists
+every hour, how many answers and how many separate days it rests on, and
+whether it qualified.
+
 Cards already part-way through learning are counted by the answers they still
 owe (`cards.left`), not as one card each, and every count comes from Anki's own
 scheduler, so per-deck limits are respected.

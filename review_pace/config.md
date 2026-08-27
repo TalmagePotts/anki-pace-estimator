@@ -11,6 +11,11 @@ proper settings dialog with a deck picker. Editing the JSON here works too.
 - **speed.features** — any of `ease`, `interval`. Extra ways to split the speed
   measurement on top of card type. Off by default.
 - **speed.min_sample** — widen the window automatically below this many reviews.
+- **speed.time_of_day** — adjust the estimate for the hour you study in.
+- **speed.time_of_day_min_days** — an hour must span this many separate days
+  before it may move an estimate. Lowering it is not advised; see the README.
+- **speed.time_of_day_shrinkage** — how much evidence an hour needs before its
+  measured difference is believed in full.
 - **display.speed_display** — `mean`, `typical` or `both`.
 - **display.columns** — 0 picks a column count from the number of tiles so the
   last row stays full.

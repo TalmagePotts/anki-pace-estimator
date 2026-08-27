@@ -138,6 +138,7 @@ def render_report(snap: Snapshot, cfg) -> str:
             ))
         )
         parts.append(_feature_table(snap, cfg))
+        parts.append(_hour_table(snap, cfg))
 
     est = snap.estimate
     if est.parts:
@@ -220,6 +221,62 @@ def _feature_table(snap: Snapshot, cfg) -> str:
         "own; below that it falls back to the card type, so a rarely-seen "
         "combination cannot swing the estimate.</div></div>"
         % (names, _table(["Bucket", "Samples", "Speed", "Used"], rows, "lrrl"), MIN_SAMPLES)
+    )
+
+
+def _hour_table(snap: Snapshot, cfg) -> str:
+    """Speed by hour of the day, and which hours are trusted enough to use."""
+    speeds = snap.speeds
+    if not speeds.hour_speeds:
+        return ""
+    from ..stats import DEFAULT_HOUR_MIN_DAYS  # noqa: F401
+
+    mode = cfg["speed"]["mode"]
+    min_days = int(cfg["speed"]["time_of_day_min_days"])
+    applying = bool(cfg["speed"]["time_of_day"])
+    rows = []
+    for hour in sorted(speeds.hour_speeds):
+        cs = speeds.hour_speeds[hour]
+        if not cs.n:
+            continue
+        days = speeds.hour_days.get(hour, 0)
+        factor = speeds.hour_factors.get(hour)
+        if not applying:
+            verdict = "not applied"
+        elif factor is None:
+            verdict = "only %d day%s" % (days, "" if days == 1 else "s")
+        elif abs(factor - 1) < 0.005:
+            verdict = "no effect"
+        else:
+            verdict = "%+.0f%%" % ((factor - 1) * 100)
+        rows.append(
+            [
+                "%02d:00" % hour,
+                "{:,}".format(cs.n),
+                str(days),
+                K.fmt_secs_per_card(cs.pick(mode)),
+                verdict,
+            ]
+        )
+    if not rows:
+        return ""
+    note = (
+        "Hourly averages flatter themselves: most of the gap between your "
+        "fastest and slowest hour is <i>which days</i> those hours fell on, not "
+        "the hours themselves. An hour is only allowed to move the estimate "
+        "once it has been studied on %d separate days, and even then its "
+        "difference is scaled back until the sample supports it. Hours that do "
+        "not clear that bar are shown here but not used."
+    ) % min_days
+    if not applying:
+        note += (
+            " Adjusting for the time of day is currently switched off, so none "
+            "of these are being applied."
+        )
+    return (
+        '<div class="rvp-sec"><h2>By time of day</h2>%s'
+        '<div class="rvp-note">%s</div></div>'
+        % (_table(["Hour", "Answers", "Days", "Speed", "Applied"], rows, "lrrrr"), note)
     )
 
 
