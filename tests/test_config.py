@@ -118,3 +118,33 @@ def test_default_window_is_short_and_has_a_floor():
     cfg = C.normalise({})
     assert cfg["speed"]["lookback_days"] == 14
     assert cfg["speed"]["min_sample"] > 0
+
+
+def test_estimator_choices_are_all_allowed():
+    for name in ("mean", "trimmed", "median"):
+        assert C.normalise({"speed": {"estimator": name}})["speed"]["estimator"] == name
+    assert C.normalise({"speed": {"estimator": "vibes"}})["speed"]["estimator"] == "mean"
+
+
+def test_old_aggregate_key_is_dropped_not_carried_over():
+    # It defaulted to the median, which underestimates; users land on the mean
+    # and can opt back in deliberately.
+    cfg = C.normalise({"speed": {"aggregate": "median"}})
+    assert "aggregate" not in cfg["speed"]
+    assert cfg["speed"]["estimator"] == "mean"
+
+
+def test_features_are_validated_and_deduplicated():
+    cfg = C.normalise({"speed": {"features": ["ease", "ease", "tarot", "interval"]}})
+    assert cfg["speed"]["features"] == ["ease", "interval"]
+    assert C.normalise({})["speed"]["features"] == []
+
+
+def test_speed_display_choices():
+    for name in ("mean", "typical", "both"):
+        assert C.normalise({"display": {"speed_display": name}})["display"][
+            "speed_display"
+        ] == name
+    assert C.normalise({"display": {"speed_display": "?"}})["display"][
+        "speed_display"
+    ] == "mean"

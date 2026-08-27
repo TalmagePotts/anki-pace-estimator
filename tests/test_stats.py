@@ -267,6 +267,96 @@ def test_trimmed_option_discards_the_slow_tail():
     assert trimmed < plain
 
 
-def test_unknown_aggregate_falls_back_to_the_mean():
-    assert S.aggregate([1, 2, 30], "median") == S.aggregate([1, 2, 30], "mean")
+def test_every_estimator_is_available():
+    vals = [1, 2, 30]
+    assert S.aggregate(vals, "mean") == 11
+    assert S.aggregate(vals, "median") == 2
+    assert S.aggregate(vals, "trimmed") == 11  # too few values to trim
+    assert S.aggregate(vals, "nonsense") == 11  # unknown falls back to the mean
     assert S.aggregate([], "mean") == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Optional feature buckets
+# ---------------------------------------------------------------------------
+
+
+def test_ease_and_interval_bucketing():
+    assert S.ease_bucket(0) == "n/a"
+    assert S.ease_bucket(1900) == "hard"
+    assert S.ease_bucket(2500) == "normal"
+    assert S.ease_bucket(3100) == "easy"
+    assert S.interval_bucket(0) == "new"
+    assert S.interval_bucket(3) == "<1w"
+    assert S.interval_bucket(20) == "1-4w"
+    assert S.interval_bucket(90) == "1-6m"
+    assert S.interval_bucket(400) == "6m+"
+
+
+def test_bucket_key_always_leads_with_the_card_class():
+    key = S.bucket_key(S.MATURE, 1900, 200, ["ease", "interval"])
+    assert key == (S.MATURE, "hard", "6m+")
+    assert S.bucket_key(S.MATURE, 1900, 200, []) == (S.MATURE,)
+    assert S.describe_key(key).startswith("Mature")
+
+
+def test_features_are_off_unless_asked_for():
+    rows = [rev(i * 8, 5, S.RT_REVIEW, ivl=100, cid=i) for i in range(30)]
+    assert S.compute_speeds(S.annotate(rows)).per_key == {}
+
+
+def test_feature_buckets_get_their_own_speeds():
+    rows = []
+    for i in range(40):  # hard cards: slow
+        rows.append(S.Review(i * 20_000, i, 1, 3, 100, 100, 18_000, S.RT_REVIEW, 1900))
+    for i in range(40):  # easy cards: quick
+        rows.append(S.Review(10 ** 6 + i * 20_000, 100 + i, 1, 3, 100, 100, 4_000,
+                             S.RT_REVIEW, 3000))
+    sp = S.compute_speeds(S.annotate(rows), "mean", ["ease"])
+    assert abs(sp.for_key((S.MATURE, "hard")).answer - 18) < 0.1
+    assert abs(sp.for_key((S.MATURE, "easy")).answer - 4) < 0.1
+
+
+def test_thin_bucket_falls_back_to_its_card_class():
+    rows = [S.Review(i * 20_000, i, 1, 3, 100, 100, 5_000, S.RT_REVIEW, 2500)
+            for i in range(40)]
+    rows.append(S.Review(10 ** 6, 999, 1, 3, 100, 100, 55_000, S.RT_REVIEW, 1500))
+    sp = S.compute_speeds(S.annotate(rows), "mean", ["ease"])
+    # One "hard" sample is not evidence; it must not price the whole bucket.
+    assert sp.for_key((S.MATURE, "hard")) is sp.for_class(S.MATURE)
+
+
+def test_estimate_prices_each_bucket_separately():
+    speeds = S.Speeds(
+        per_class={S.MATURE: S.ClassSpeed(n=200, answer=10, wall=10)},
+        overall=S.ClassSpeed(n=200, answer=10, wall=10),
+        per_key={
+            (S.MATURE, "hard"): S.ClassSpeed(n=100, answer=20, wall=20),
+            (S.MATURE, "easy"): S.ClassSpeed(n=100, answer=5, wall=5),
+        },
+        features=("ease",),
+    )
+    work = S.Workload(
+        review_cards=100,
+        review_buckets={(S.MATURE, "hard"): 40, (S.MATURE, "easy"): 60},
+    )
+    est = S.estimate(work, speeds, S.Behaviour(lapse_rate=0.0))
+    assert est.seconds == 40 * 20 + 60 * 5
+    assert {p.reps for p in est.parts} == {40.0, 60.0}
+
+
+def test_estimate_ignores_buckets_when_features_are_off():
+    speeds = S.Speeds(
+        per_class={S.MATURE: S.ClassSpeed(n=200, answer=10, wall=10)},
+        overall=S.ClassSpeed(n=200, answer=10, wall=10),
+        per_key={(S.MATURE, "hard"): S.ClassSpeed(n=100, answer=20, wall=20)},
+        features=(),
+    )
+    work = S.Workload(review_cards=100, review_buckets={(S.MATURE, "hard"): 100})
+    assert S.estimate(work, speeds, S.Behaviour(lapse_rate=0.0)).seconds == 1000
+
+
+def test_unknown_features_are_ignored():
+    rows = [rev(i * 8, 5, S.RT_REVIEW, ivl=100, cid=i) for i in range(30)]
+    sp = S.compute_speeds(S.annotate(rows), "mean", ["ease", "astrology"])
+    assert sp.features == ("ease",)

@@ -41,11 +41,26 @@ def _speed_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:
         return [], []
     overall = snap.speeds.overall
     wall_mode = cfg["speed"]["mode"] == K.SPEED_MODE_WALL
-    primary = overall.wall if wall_mode else overall.answer
+    average = overall.wall if wall_mode else overall.answer
+    typical = overall.wall_typical if wall_mode else overall.answer_typical
     other = overall.answer if wall_mode else overall.wall
-    label = "Wall-clock speed" if wall_mode else "Answer speed"
+    kind = "Wall-clock" if wall_mode else "Answer"
+
+    display = cfg["display"]["speed_display"]
+    if display == "typical":
+        # The middle card, which is what a session *feels* like -- deliberately
+        # not the figure the estimate is built from.
+        return [
+            T.tile("%.1f" % typical, "%s, typical card" % kind,
+                   "average %.1fs" % average, "accent", unit="s/card")
+        ], []
+    if display == "both":
+        return [
+            T.tile("%.1f" % average, "%s speed" % kind,
+                   "typical card %.1fs" % typical, "accent", unit="s/card")
+        ], []
     sub = "%s %.1fs" % ("answer only" if wall_mode else "with gaps", other)
-    return [T.tile("%.1f" % primary, label, sub, "accent", unit="s/card")], []
+    return [T.tile("%.1f" % average, "%s speed" % kind, sub, "accent", unit="s/card")], []
 
 
 def _learned_component(snap: Snapshot, cfg) -> Tuple[List[str], List[str]]:

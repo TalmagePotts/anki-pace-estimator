@@ -41,14 +41,32 @@ of cards account for 38% of all time spent, and the median throws that tail
 away. Per-card-type means beat one overall mean by about two points, and a
 14-day window beats 30 or 90 days, because it tracks your current pace.
 
-Card-level features were tested and **rejected**: adding ease factor, lapse
-count, interval or repetition count to the model changed the error by less than
-a point, which is noise at this sample size. A variance decomposition explains
-why -- of the variation in how long a card takes, which card type it is
-explains 0.3%, which *day* it falls on explains 10%, and the remaining 90% is
-card-to-card noise that averages out over a session. Your pace swings about
-±39% from day to day, and no property of a card can predict that. It is
-expressed as the ETA's upper bound instead.
+Card-level features changed the error by less than a point, which is noise at
+this sample size, so they are **off by default** -- but they are implemented
+and switchable. A variance decomposition explains why they do not help much: of
+the variation in how long a card takes, which card type it is explains 0.3%,
+which *day* it falls on explains 10%, and the remaining 90% is card-to-card
+noise that averages out over a session. Your pace swings about ±39% from day to
+day, and no property of a card can predict that; it is expressed as the ETA's
+upper bound instead.
+
+## Everything here is a setting
+
+None of the above is hard-coded. Under **Speed & accuracy**:
+
+- **Estimates built from** -- average (the only unbiased choice for a total),
+  average ignoring your slowest 10%, or median if you want it despite the bias.
+- **Also split speeds by** -- ease factor and/or interval, on top of card type.
+  A split is only used once it has 20 samples of its own; below that it falls
+  back to the card type, so a rare combination cannot swing the estimate. The
+  splits are worth looking at even when they barely move the total: on the test
+  collection a *hard* young card took 18.9s against 13.7s for a normal one.
+- Window length, minimum sample, idle cutoff, answer cap, whether to count full
+  learning steps, whether to allow for lapses, and whether to separate card
+  types at all.
+
+Under **Home screen**, **Show speed as** picks whether the panel leads with the
+average, the typical (median) card, or the average with the typical underneath.
 
 Cards already part-way through learning are counted by the answers they still
 owe (`cards.left`), not as one card each, and every count comes from Anki's own

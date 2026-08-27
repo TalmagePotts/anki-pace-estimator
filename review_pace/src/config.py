@@ -26,7 +26,13 @@ DEFAULTS: Dict[str, Any] = {
     },
     "speed": {
         "mode": SPEED_MODE_WALL,  # "wall" or "answer"
-        "aggregate": "mean",  # "mean" or "trimmed"
+        # What the ETA is built from. "mean" is the only unbiased choice for a
+        # total; the others are offered because they are yours to pick.
+        "estimator": "mean",  # "mean", "trimmed" or "median"
+        # Extra ways to split the speed measurement, on top of card type.
+        # Backtesting found these change accuracy by well under a percentage
+        # point, so they are off by default -- but they are yours to turn on.
+        "features": [],  # any of "ease", "interval"
         # Fourteen days, not thirty: backtesting against real review history
         # showed a shorter window tracks your current pace noticeably better.
         "lookback_days": 14,
@@ -55,6 +61,8 @@ DEFAULTS: Dict[str, Any] = {
         "accent": "",  # "" follows Anki's theme accent
         "font_scale": 1.0,
         "period_mode": "rolling",  # "rolling" or "calendar"
+        # Which seconds-per-card figure the home screen leads with.
+        "speed_display": "mean",  # "mean", "typical" or "both"
         "title": "Review Pace",
         "show_title": True,
     },
@@ -153,12 +161,22 @@ def normalise(stored: Any) -> Dict[str, Any]:
     sp["min_sample"] = max(0, min(100000, sp["min_sample"]))
     if sp["mode"] not in ("wall", "answer"):
         sp["mode"] = "wall"
-    if sp["aggregate"] not in ("mean", "trimmed"):
-        # "median" was offered once; multiplying a median by a card count
-        # underestimates every session, so it maps onto the mean.
-        sp["aggregate"] = "mean"
+    # "aggregate" was the old name and defaulted to the median, which
+    # underestimates every session. It is dropped rather than carried over, so
+    # existing users land on the mean and can opt back out deliberately.
+    sp.pop("aggregate", None)
+    if sp["estimator"] not in ("mean", "trimmed", "median"):
+        sp["estimator"] = "mean"
+    known = ("ease", "interval")
+    seen = []
+    for feature in sp["features"]:
+        if feature in known and feature not in seen:
+            seen.append(feature)
+    sp["features"] = seen
 
     disp = cfg["display"]
+    if disp["speed_display"] not in ("mean", "typical", "both"):
+        disp["speed_display"] = "mean"
     disp["font_scale"] = max(0.7, min(2.0, float(disp["font_scale"])))
     disp["columns"] = max(0, min(6, int(disp["columns"])))
 

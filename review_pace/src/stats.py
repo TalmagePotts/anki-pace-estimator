@@ -54,6 +54,9 @@ class Review:
     last_ivl: int
     time_ms: int
     type: int
+    #: The card's ease factor going into this review, in permille (2500 = 250%).
+    #: Zero when Anki did not record one, which is normal for learning cards.
+    factor: int = 0
 
 
 @dataclass
@@ -90,6 +93,73 @@ def classify(review: Review) -> Optional[str]:
         ivl = review.last_ivl if review.last_ivl > 0 else review.ivl
         return MATURE if ivl >= MATURE_IVL else YOUNG
     return None
+
+
+# ---------------------------------------------------------------------------
+# Optional feature buckets
+# ---------------------------------------------------------------------------
+
+FEATURE_EASE = "ease"
+FEATURE_INTERVAL = "interval"
+
+ALL_FEATURES = (FEATURE_EASE, FEATURE_INTERVAL)
+
+FEATURE_LABELS = {
+    FEATURE_EASE: "Ease factor",
+    FEATURE_INTERVAL: "Interval",
+}
+
+#: Ease factor is stored in permille. The splits sit either side of Anki's
+#: 250% starting factor, so a card only lands in "hard" or "easy" once its own
+#: history has actually moved it there.
+EASE_BUCKETS = (("hard", 2200), ("normal", 2700), ("easy", 10 ** 9))
+
+INTERVAL_BUCKETS = (("<1w", 7), ("1-4w", 30), ("1-6m", 180), ("6m+", 10 ** 9))
+
+
+def ease_bucket(factor: int) -> str:
+    if not factor:
+        return "n/a"
+    for name, upper in EASE_BUCKETS:
+        if factor < upper:
+            return name
+    return EASE_BUCKETS[-1][0]
+
+
+def interval_bucket(days: int) -> str:
+    if days <= 0:
+        return "new"
+    for name, upper in INTERVAL_BUCKETS:
+        if days <= upper:
+            return name
+    return INTERVAL_BUCKETS[-1][0]
+
+
+def bucket_key(cls: str, factor: int, ivl: int, features: Sequence[str]) -> tuple:
+    """The key a review is averaged under.
+
+    Always starts with the card class, so a bucket that turns out to be too
+    thin can fall back to its class without losing the most important split.
+    """
+    key = [cls]
+    for feature in features:
+        if feature == FEATURE_EASE:
+            key.append(ease_bucket(factor))
+        elif feature == FEATURE_INTERVAL:
+            key.append(interval_bucket(ivl))
+    return tuple(key)
+
+
+def review_key(review: "Review", features: Sequence[str]) -> Optional[tuple]:
+    cls = classify(review)
+    if cls is None:
+        return None
+    ivl = review.last_ivl if review.last_ivl > 0 else review.ivl
+    return bucket_key(cls, review.factor, ivl, features)
+
+
+def describe_key(key: tuple) -> str:
+    return " · ".join([CLASS_LABELS.get(key[0], key[0])] + list(key[1:]))
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +210,8 @@ def aggregate(values: Sequence[float], method: str) -> float:
         return 0.0
     if method == "trimmed":
         return trimmed_mean(values)
+    if method == "median":
+        return percentile(values, 50.0)
     return sum(values) / len(values)
 
 
@@ -236,6 +308,10 @@ class Speeds:
     #: coefficient of variation. Tired days are slow days, and that moves the
     #: whole session together rather than card by card.
     day_cv: float = 0.0
+    #: Speeds for the optional finer buckets, keyed by :func:`bucket_key`.
+    #: Empty unless extra features are switched on.
+    per_key: Dict[tuple, ClassSpeed] = field(default_factory=dict)
+    features: Tuple[str, ...] = ()
 
     def for_class(self, cls: str) -> ClassSpeed:
         """Speed for a class, falling back to the overall figure when a class
@@ -247,6 +323,17 @@ class Speeds:
 
     def secs(self, cls: str, mode: str, slow: bool = False) -> float:
         return self.for_class(cls).pick(mode, slow)
+
+    def for_key(self, key: tuple) -> ClassSpeed:
+        """Speed for a feature bucket, falling back to its card class.
+
+        A finer split is only worth using when it has enough evidence of its
+        own; otherwise it is noise dressed up as precision.
+        """
+        cs = self.per_key.get(key)
+        if cs is not None and cs.n >= MIN_SAMPLES:
+            return cs
+        return self.for_class(key[0] if key else "")
 
 
 #: Below this many samples a class borrows the overall average instead.
@@ -310,8 +397,14 @@ def day_variation(timed: Sequence[TimedReview], mode: str = "wall") -> float:
     return min(MAX_DAY_CV, stdev(means) / grand)
 
 
-def compute_speeds(timed: Sequence[TimedReview], method: str = "median") -> Speeds:
+def compute_speeds(
+    timed: Sequence[TimedReview],
+    method: str = "mean",
+    features: Sequence[str] = (),
+) -> Speeds:
+    features = tuple(f for f in features if f in ALL_FEATURES)
     buckets: Dict[str, List[TimedReview]] = {c: [] for c in CLASSES}
+    keyed: Dict[tuple, List[TimedReview]] = {}
     usable: List[TimedReview] = []
     for t in timed:
         cls = classify(t.review)
@@ -319,9 +412,15 @@ def compute_speeds(timed: Sequence[TimedReview], method: str = "median") -> Spee
             continue
         buckets[cls].append(t)
         usable.append(t)
+        if features:
+            key = review_key(t.review, features)
+            if key is not None:
+                keyed.setdefault(key, []).append(t)
     speeds = Speeds(
         per_class={c: _class_speed(v, method) for c, v in buckets.items()},
         overall=_class_speed(usable, method),
+        per_key={k: _class_speed(v, method) for k, v in keyed.items()},
+        features=features,
     )
     total_wall = sum(t.wall_s for t in usable)
     if total_wall > 0:
@@ -343,6 +442,9 @@ class Workload:
     review_cards: int = 0
     #: Reps (not cards) still owed by cards already part-way through learning.
     learning_reps: int = 0
+    #: How ``review_cards`` splits across feature buckets. Only populated when
+    #: extra features are switched on; the counts sum to ``review_cards``.
+    review_buckets: Dict[tuple, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -426,18 +528,26 @@ def estimate(
     add("Learning", float(workload.learning_reps), learn.pick(mode), learn.sd(mode))
 
     if workload.review_cards:
-        # Reviews are a mix of young and mature; weight by how many of each the
-        # user actually answers rather than guessing 50/50.
-        y = speeds.for_class(YOUNG)
-        m = speeds.for_class(MATURE)
-        total_n = y.n + m.n
-        mature_share = (m.n / total_n) if total_n else 0.5
-        young_share = 1.0 - mature_share
-        blended = m.pick(mode) * mature_share + y.pick(mode) * young_share
-        blended_sd = math.sqrt(
-            m.sd(mode) ** 2 * mature_share + y.sd(mode) ** 2 * young_share
-        )
-        add("Reviews", float(workload.review_cards), blended, blended_sd)
+        if speeds.features and workload.review_buckets:
+            # Each bucket of due cards priced at its own measured speed.
+            for key, count in sorted(workload.review_buckets.items()):
+                if count <= 0:
+                    continue
+                cs = speeds.for_key(key)
+                add(describe_key(key), float(count), cs.pick(mode), cs.sd(mode))
+        else:
+            # Reviews are a mix of young and mature; weight by how many of each
+            # the user actually answers rather than guessing 50/50.
+            y = speeds.for_class(YOUNG)
+            m = speeds.for_class(MATURE)
+            total_n = y.n + m.n
+            mature_share = (m.n / total_n) if total_n else 0.5
+            young_share = 1.0 - mature_share
+            blended = m.pick(mode) * mature_share + y.pick(mode) * young_share
+            blended_sd = math.sqrt(
+                m.sd(mode) ** 2 * mature_share + y.sd(mode) ** 2 * young_share
+            )
+            add("Reviews", float(workload.review_cards), blended, blended_sd)
 
         if include_lapses:
             relearn = speeds.for_class(RELEARN)

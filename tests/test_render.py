@@ -239,3 +239,36 @@ def test_speed_tile_reports_the_mean_matching_answered_today():
     html = home.render(snap, C.normalise({"speed": {"mode": "wall"}}))
     assert ">6.6<" in html          # 30-day mean
     assert "6.6s each" in html      # today: 660s / 100 cards
+
+
+def test_speed_display_choices():
+    snap = make_snapshot()
+    snap.speeds.overall = S.ClassSpeed(
+        n=5400, answer=5, wall=6.6, answer_typical=3, wall_typical=4.1
+    )
+    mean = home.render(snap, C.normalise({"display": {"speed_display": "mean"}}))
+    typical = home.render(snap, C.normalise({"display": {"speed_display": "typical"}}))
+    both = home.render(snap, C.normalise({"display": {"speed_display": "both"}}))
+
+    assert ">6.6<" in mean and "typical" not in mean
+    assert ">4.1<" in typical and "typical card" in typical.lower()
+    assert "average 6.6s" in typical
+    assert ">6.6<" in both and "typical card 4.1s" in both
+
+
+def test_feature_buckets_reach_the_estimate_through_the_config():
+    from src import collector as CO2  # noqa: F401
+
+    cfg = C.normalise({"speed": {"features": ["ease"]}})
+    assert cfg["speed"]["features"] == ["ease"]
+    speeds = S.Speeds(
+        per_class={S.MATURE: S.ClassSpeed(n=200, answer=10, wall=10)},
+        overall=S.ClassSpeed(n=200, answer=10, wall=10),
+        per_key={(S.MATURE, "hard"): S.ClassSpeed(n=100, answer=30, wall=30)},
+        features=("ease",),
+    )
+    work = S.Workload(review_cards=10, review_buckets={(S.MATURE, "hard"): 10})
+    est = S.estimate(work, speeds, S.Behaviour(lapse_rate=0.0),
+                     count_full_learning=cfg["speed"]["count_full_learning"])
+    assert est.seconds == 300
+    assert "Hard" in est.parts[0].label or "hard" in est.parts[0].label

@@ -105,6 +105,7 @@ def render_report(snap: Snapshot, cfg) -> str:
                     "{:,}".format(cs.n),
                     K.fmt_secs_per_card(cs.answer),
                     K.fmt_secs_per_card(cs.wall),
+                    K.fmt_secs_per_card(cs.typical(cfg["speed"]["mode"])),
                     K.fmt_secs_per_card(overhead) if overhead > 0.05 else "--",
                     K.fmt_secs_per_card(cs.pick(cfg["speed"]["mode"], slow=True)),
                 ]
@@ -116,6 +117,7 @@ def render_report(snap: Snapshot, cfg) -> str:
                 "<b>{:,}</b>".format(overall.n),
                 "<b>%s</b>" % K.fmt_secs_per_card(overall.answer),
                 "<b>%s</b>" % K.fmt_secs_per_card(overall.wall),
+                "<b>%s</b>" % K.fmt_secs_per_card(overall.typical(cfg["speed"]["mode"])),
                 "<b>%s</b>" % K.fmt_secs_per_card(max(0.0, overall.wall - overall.answer)),
                 "<b>%s</b>" % K.fmt_secs_per_card(overall.pick(cfg["speed"]["mode"], slow=True)),
             ]
@@ -126,13 +128,16 @@ def render_report(snap: Snapshot, cfg) -> str:
             "pressing a button. “Wall” adds the gap before the next card appears — "
             "rendering, hesitation, and the moment between cards. “Slow” is the "
             "80th percentile of a single answer — the ETA range is built from the "
-            "spread instead, which shrinks as the workload grows.</div></div>"
+            "spread instead, which shrinks as the workload grows. “Typical” is the "
+            "middle card; it is shown for interest and never multiplied by a card "
+            "count.</div></div>"
             % (snap.lookback_days, _table(
-                ["Card type", "Samples", "Answer", "Wall", "Overhead", "Slow"],
+                ["Card type", "Samples", "Answer", "Wall", "Typical", "Overhead", "Slow"],
                 rows,
-                "lrrrrr",
+                "lrrrrrr",
             ))
         )
+        parts.append(_feature_table(snap, cfg))
 
     est = snap.estimate
     if est.parts:
@@ -182,6 +187,40 @@ def render_report(snap: Snapshot, cfg) -> str:
         % _table(["Period", "Answers", "Time", "New learned"], rows, "lrrr")
     )
     return "".join(parts)
+
+
+def _feature_table(snap: Snapshot, cfg) -> str:
+    """Speeds for the optional finer splits, when they are switched on."""
+    speeds = snap.speeds
+    if not speeds.features or not speeds.per_key:
+        return ""
+    from ..stats import FEATURE_LABELS, MIN_SAMPLES, describe_key
+
+    mode = cfg["speed"]["mode"]
+    rows = []
+    for key in sorted(speeds.per_key):
+        cs = speeds.per_key[key]
+        if not cs.n:
+            continue
+        used = cs.n >= MIN_SAMPLES
+        rows.append(
+            [
+                T.esc(describe_key(key)),
+                "{:,}".format(cs.n),
+                K.fmt_secs_per_card(cs.pick(mode)),
+                "yes" if used else "falls back to card type",
+            ]
+        )
+    if not rows:
+        return ""
+    names = ", ".join(FEATURE_LABELS[f].lower() for f in speeds.features)
+    return (
+        '<div class="rvp-sec"><h2>Split by %s</h2>%s'
+        '<div class="rvp-note">A split is only used once it has %d samples of its '
+        "own; below that it falls back to the card type, so a rarely-seen "
+        "combination cannot swing the estimate.</div></div>"
+        % (names, _table(["Bucket", "Samples", "Speed", "Used"], rows, "lrrl"), MIN_SAMPLES)
+    )
 
 
 class StatsWindow(QDialog):

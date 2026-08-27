@@ -205,7 +205,7 @@ def _remaining_learning_reps(col, cfg, fallback: int) -> int:
 
 _REVIEW_SQL = """
     select r.id, r.cid, case when c.odid != 0 then c.odid else c.did end,
-           r.ease, r.ivl, r.lastIvl, r.time, r.type
+           r.ease, r.ivl, r.lastIvl, r.time, r.type, r.factor
     from revlog r join cards c on c.id = r.cid
     where r.id >= ?
     order by r.id desc
@@ -316,8 +316,8 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
     timed = [t for t in timed_all if not expanded or t.review.did in expanded]
     snap.sample_size = len(timed)
 
-    method = cfg["speed"]["aggregate"]
-    snap.speeds = S.compute_speeds(timed, method)
+    features = tuple(cfg["speed"]["features"])
+    snap.speeds = S.compute_speeds(timed, cfg["speed"]["estimator"], features)
     if not cfg["speed"]["per_card_class"]:
         # Collapse to a single figure by making every class defer to the
         # overall average.
@@ -327,6 +327,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
     snap.behaviour = S.measure_behaviour(timed, new_card_ids=fresh_ids)
 
     snap.workload, snap.per_deck = gather_workload(col, scoped_cfg, selected)
+    snap.workload.review_buckets = review_buckets(col, expanded, snap.workload, features)
     snap.estimate = S.estimate(
         snap.workload,
         snap.speeds,
@@ -345,10 +346,52 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
     return snap
 
 
+def review_buckets(col, expanded: Set[int], workload: S.Workload,
+                   features: Sequence[str]) -> Dict[tuple, float]:
+    """Split today's due reviews across feature buckets.
+
+    Anki's scheduler reports how many reviews are due after limits, but not
+    which cards they are. The bucket *proportions* are read from the pool of
+    cards that are due, then applied to that count -- which is right as long as
+    the limit does not systematically prefer one kind of card, and Anki's does
+    not.
+    """
+    if not features or not workload.review_cards:
+        return {}
+    where = "queue = 2 and due <= ?"
+    if expanded:
+        where += " and (case when odid != 0 then odid else did end) in %s" % _sql_id_list(
+            sorted(expanded)
+        )
+    try:
+        rows = col.db.all("select factor, ivl from cards where " + where, col.sched.today)
+    except Exception:
+        return {}
+    if not rows:
+        return {}
+
+    counts: Dict[tuple, int] = {}
+    for factor, ivl in rows:
+        ivl = int(ivl or 0)
+        cls = S.MATURE if ivl >= S.MATURE_IVL else S.YOUNG
+        key = S.bucket_key(cls, int(factor or 0), ivl, features)
+        counts[key] = counts.get(key, 0) + 1
+    total = float(sum(counts.values()))
+    return {k: v / total * workload.review_cards for k, v in counts.items()}
+
+
 def _fill_per_deck_estimates(snap: Snapshot, cfg) -> None:
+    total_reviews = float(sum(l.review for l in snap.per_deck)) or 1.0
     for line in snap.per_deck:
+        share = line.review / total_reviews
+        buckets = {k: v * share for k, v in snap.workload.review_buckets.items()}
         est = S.estimate(
-            S.Workload(new_cards=line.new, review_cards=line.review, learning_reps=line.learning),
+            S.Workload(
+                new_cards=line.new,
+                review_cards=line.review,
+                learning_reps=line.learning,
+                review_buckets=buckets,
+            ),
             snap.speeds,
             snap.behaviour,
             mode=cfg["speed"]["mode"],

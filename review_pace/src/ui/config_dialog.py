@@ -304,6 +304,10 @@ class ConfigDialog(QDialog):
         self.font_scale = QDoubleSpinBox()
         self.font_scale.setRange(0.7, 2.0)
         self.font_scale.setSingleStep(0.05)
+        self.speed_display = QComboBox()
+        self.speed_display.addItem("Average per card", "mean")
+        self.speed_display.addItem("Typical card (median)", "typical")
+        self.speed_display.addItem("Average, with the typical card underneath", "both")
         self.period_mode = QComboBox()
         self.period_mode.addItem("Rolling (last 7 / 30 days)", "rolling")
         self.period_mode.addItem("Calendar (this week / this month)", "calendar")
@@ -319,6 +323,7 @@ class ConfigDialog(QDialog):
         form.addRow("", self.compact)
         form.addRow("Columns", self.columns)
         form.addRow("Text size", self.font_scale)
+        form.addRow("Show speed as", self.speed_display)
         form.addRow("Week / month", self.period_mode)
         form.addRow("Accent colour", self.accent)
         lay.addLayout(form)
@@ -349,9 +354,10 @@ class ConfigDialog(QDialog):
         self.per_class = QCheckBox("Measure new, young, mature and relearning cards separately")
         self.full_learning = QCheckBox("Count every learning step, not one answer per new card")
         self.include_lapses = QCheckBox("Allow for reviews you will fail and see again today")
-        self.aggregate = QComboBox()
-        self.aggregate.addItem("Average of every card (recommended)", "mean")
-        self.aggregate.addItem("Average, ignoring your slowest 10%", "trimmed")
+        self.estimator = QComboBox()
+        self.estimator.addItem("Average — unbiased for totals (recommended)", "mean")
+        self.estimator.addItem("Average, ignoring your slowest 10%", "trimmed")
+        self.estimator.addItem("Median — reads low, underestimates totals", "median")
         self.lookback = QSpinBox()
         self.lookback.setRange(1, 3650)
         self.lookback.setSuffix(" days")
@@ -369,7 +375,12 @@ class ConfigDialog(QDialog):
         form.addRow("", self.per_class)
         form.addRow("", self.full_learning)
         form.addRow("", self.include_lapses)
-        form.addRow("Speed measured as", self.aggregate)
+        form.addRow("Estimates built from", self.estimator)
+
+        self.feature_ease = QCheckBox("Ease factor (hard / normal / easy cards)")
+        self.feature_interval = QCheckBox("Interval (how far apart the card is scheduled)")
+        form.addRow("Also split speeds by", self.feature_ease)
+        form.addRow("", self.feature_interval)
         form.addRow("Look back over", self.lookback)
         form.addRow("Treat a gap longer than", self.idle_cutoff)
         form.addRow("Cap a single answer at", self.max_answer)
@@ -378,7 +389,13 @@ class ConfigDialog(QDialog):
         lay.addWidget(
             _label(
                 "A gap longer than the cutoff counts as a break, not study time, so "
-                "walking away mid-session no longer wrecks your average."
+                "walking away mid-session no longer wrecks your average.\n\n"
+                "On the collection this was tested against, the median ran 43% short "
+                "of real session times, because the slowest tenth of cards used 38% "
+                "of the time and a median discards that tail. The extra splits above "
+                "changed accuracy by well under a point — day-to-day variation "
+                "dominates — so they are off by default. A split falls back to its "
+                "card type until it has enough samples to stand on its own."
             )
         )
         lay.addStretch(1)
@@ -601,6 +618,7 @@ class ConfigDialog(QDialog):
         self.columns.setValue(d["columns"])
         self.font_scale.setValue(d["font_scale"])
         self.accent.setText(d["accent"])
+        self._set_combo(self.speed_display, d["speed_display"])
         self._set_combo(self.period_mode, d["period_mode"])
 
         s = cfg["speed"]
@@ -609,7 +627,9 @@ class ConfigDialog(QDialog):
         self.per_class.setChecked(s["per_card_class"])
         self.full_learning.setChecked(s["count_full_learning"])
         self.include_lapses.setChecked(s["include_lapses"])
-        self._set_combo(self.aggregate, s["aggregate"])
+        self._set_combo(self.estimator, s["estimator"])
+        self.feature_ease.setChecked("ease" in s["features"])
+        self.feature_interval.setChecked("interval" in s["features"])
         self.lookback.setValue(s["lookback_days"])
         self.idle_cutoff.setValue(s["idle_cutoff_s"])
         self.max_answer.setValue(s["max_answer_s"])
@@ -679,6 +699,7 @@ class ConfigDialog(QDialog):
                 "columns": self.columns.value(),
                 "font_scale": self.font_scale.value(),
                 "accent": self.accent.text().strip(),
+                "speed_display": self.speed_display.currentData(),
                 "period_mode": self.period_mode.currentData(),
             }
         )
@@ -688,7 +709,15 @@ class ConfigDialog(QDialog):
                 "per_card_class": self.per_class.isChecked(),
                 "count_full_learning": self.full_learning.isChecked(),
                 "include_lapses": self.include_lapses.isChecked(),
-                "aggregate": self.aggregate.currentData(),
+                "estimator": self.estimator.currentData(),
+                "features": [
+                    name
+                    for name, box in (
+                        ("ease", self.feature_ease),
+                        ("interval", self.feature_interval),
+                    )
+                    if box.isChecked()
+                ],
                 "lookback_days": self.lookback.value(),
                 "idle_cutoff_s": self.idle_cutoff.value(),
                 "max_answer_s": self.max_answer.value(),
