@@ -22,6 +22,34 @@ things make that wrong, and Review Pace fixes all three:
    session, so speeds are means. The median is still shown, labelled "typical",
    and is never multiplied by anything.
 
+## What the design is based on
+
+The choices above were settled by walk-forward backtesting against a real
+collection: for each day, speeds were built from the preceding days only and
+used to predict that day's total time, with no access to the day being
+predicted. Across 60-75 such days:
+
+| Estimator | Bias | Average error |
+|---|---|---|
+| Mean, per card type, 14-day window | +3.8% | **25.3%** |
+| Mean, single figure for all cards | +5.4% | 27.4% |
+| Trimmed mean | -17.3% | 31.0% |
+| Median | **-43.3%** | 45.4% |
+
+The median underestimates by more than 40%: on that collection the slowest 10%
+of cards account for 38% of all time spent, and the median throws that tail
+away. Per-card-type means beat one overall mean by about two points, and a
+14-day window beats 30 or 90 days, because it tracks your current pace.
+
+Card-level features were tested and **rejected**: adding ease factor, lapse
+count, interval or repetition count to the model changed the error by less than
+a point, which is noise at this sample size. A variance decomposition explains
+why -- of the variation in how long a card takes, which card type it is
+explains 0.3%, which *day* it falls on explains 10%, and the remaining 90% is
+card-to-card noise that averages out over a session. Your pace swings about
+±39% from day to day, and no property of a card can predict that. It is
+expressed as the ETA's upper bound instead.
+
 Cards already part-way through learning are counted by the answers they still
 owe (`cards.left`), not as one card each, and every count comes from Anki's own
 scheduler, so per-deck limits are respected.

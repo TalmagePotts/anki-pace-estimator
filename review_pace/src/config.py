@@ -27,7 +27,11 @@ DEFAULTS: Dict[str, Any] = {
     "speed": {
         "mode": SPEED_MODE_WALL,  # "wall" or "answer"
         "aggregate": "mean",  # "mean" or "trimmed"
-        "lookback_days": 30,
+        # Fourteen days, not thirty: backtesting against real review history
+        # showed a shorter window tracks your current pace noticeably better.
+        "lookback_days": 14,
+        # If the window is thin, widen it rather than estimate from noise.
+        "min_sample": 200,
         "max_rows": 60000,
         "idle_cutoff_s": 60,
         "max_answer_s": 60,
@@ -83,7 +87,7 @@ DEFAULTS: Dict[str, Any] = {
         "badge_position": "top-right",
         "scale": 1.0,
         "alert_style": "badge",  # "none", "badge", "exclamation" or "both"
-        "alert_position": "lower-half",
+        "alert_position": "bottom",
         "alert_text": "!",
         "alert_scale": 1.0,
         "start_on": "question",  # "question" or "answer"
@@ -146,6 +150,7 @@ def normalise(stored: Any) -> Dict[str, Any]:
     sp["idle_cutoff_s"] = max(5, min(3600, sp["idle_cutoff_s"]))
     sp["max_answer_s"] = max(5, min(600, sp["max_answer_s"]))
     sp["max_rows"] = max(500, min(1000000, sp["max_rows"]))
+    sp["min_sample"] = max(0, min(100000, sp["min_sample"]))
     if sp["mode"] not in ("wall", "answer"):
         sp["mode"] = "wall"
     if sp["aggregate"] not in ("mean", "trimmed"):
@@ -169,8 +174,10 @@ def normalise(stored: Any) -> Dict[str, Any]:
     goal["alert_scale"] = max(0.5, min(4.0, float(goal["alert_scale"])))
     if goal["alert_style"] not in ("none", "badge", "exclamation", "both"):
         goal["alert_style"] = "badge"
-    if goal["alert_position"] not in ("upper-half", "center", "lower-half"):
-        goal["alert_position"] = "lower-half"
+    if goal["alert_position"] not in (
+        "bottom", "lower-half", "center", "upper-half", "top"
+    ):
+        goal["alert_position"] = "bottom"
     if goal["badge_position"] not in (
         "top-right", "top-left", "bottom-right", "bottom-left"
     ):

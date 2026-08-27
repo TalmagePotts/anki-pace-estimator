@@ -73,7 +73,7 @@ def _install_stubs():
         "QGroupBox QTabWidget QTreeWidget QTreeWidgetItem QListWidget "
         "QListWidgetItem QDialogButtonBox QAbstractItemView QHeaderView Qt "
         "QKeySequence QShortcut QMessageBox QAction QToolButton "
-        "QAbstractSpinBox QTimer QKeyCombination"
+        "QAbstractSpinBox QTimer QKeyCombination QScrollArea QFrame QSizePolicy"
     ).split():
         setattr(qt, symbol, _StubMeta(symbol, (_StubBase,), {}))
     qt.pyqtSignal = _Any()

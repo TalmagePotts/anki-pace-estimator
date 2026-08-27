@@ -133,12 +133,18 @@ _JS = r"""
     alert.textContent = G.alert_text;
     alert.className = "";
     alert.style.fontSize = (22 * G.alert_scale) + "vh";
-    if (G.alert_position === "center") {
+    alert.style.top = "auto"; alert.style.bottom = "auto"; alert.style.height = "auto";
+    var p = G.alert_position;
+    if (p === "center") {
       alert.style.top = "0"; alert.style.height = "100%%";
-    } else if (G.alert_position === "upper-half") {
+    } else if (p === "upper-half") {
       alert.style.top = "0"; alert.style.height = "50%%";
-    } else {
+    } else if (p === "lower-half") {
       alert.style.top = "50%%"; alert.style.height = "50%%";
+    } else if (p === "top") {
+      alert.style.top = "6vh";
+    } else {
+      alert.style.bottom = "6vh";
     }
   } else if (alert) {
     alert.className = "";

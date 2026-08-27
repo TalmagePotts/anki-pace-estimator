@@ -103,6 +103,18 @@ def test_bad_alert_values_are_repaired():
     cfg = C.normalise({"goal": {"alert_style": "sparkles", "alert_position": "sideways",
                                 "alert_text": "   ", "badge_position": "middle"}})
     assert cfg["goal"]["alert_style"] == "badge"
-    assert cfg["goal"]["alert_position"] == "lower-half"
+    assert cfg["goal"]["alert_position"] == "bottom"
     assert cfg["goal"]["alert_text"] == "!"
     assert cfg["goal"]["badge_position"] == "top-right"
+
+
+def test_alert_positions_include_bottom_middle():
+    for position in ("bottom", "lower-half", "center", "upper-half", "top"):
+        cfg = C.normalise({"goal": {"alert_position": position}})
+        assert cfg["goal"]["alert_position"] == position
+
+
+def test_default_window_is_short_and_has_a_floor():
+    cfg = C.normalise({})
+    assert cfg["speed"]["lookback_days"] == 14
+    assert cfg["speed"]["min_sample"] > 0

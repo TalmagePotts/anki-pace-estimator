@@ -163,8 +163,9 @@ def test_warning_only_mode_has_no_timer():
 
 
 def test_alert_position_reaches_the_script():
-    for position, css_top in (("lower-half", '"50%"'), ("upper-half", '"0"'),
-                              ("center", '"0"')):
+    for position, css_top in (("bottom", '"6vh"'), ("lower-half", '"50%"'),
+                              ("upper-half", '"0"'), ("center", '"0"'),
+                              ("top", '"6vh"')):
         cfg = C.normalise({"goal": {"enabled": True, "alert_style": "exclamation",
                                     "alert_position": position}})
         from src.session import LiveSession

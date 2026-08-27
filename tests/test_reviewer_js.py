@@ -155,3 +155,46 @@ def test_pulse_can_be_turned_off():
     assert "rvp-pulsing" not in off["alertClass"]
     assert off["alertShown"] is True  # still shown, just not animated
     assert "rvp-nopulse" in off["timerClass"]
+
+
+def test_bottom_middle_symbol_sits_at_the_bottom():
+    r = run_timer(
+        {"show_timer": False, "alert_style": "exclamation",
+         "alert_position": "bottom", "alert_text": "!"},
+        [9999, 10000],
+    )
+    assert r[0]["alertShown"] is False
+    assert r[1]["alertShown"] is True
+
+
+def test_every_alert_position_is_pinned_correctly():
+    """Each position must clear the anchors it is not using.
+
+    Setting only ``top`` while a previous card left ``bottom`` set would stretch
+    the symbol across the whole screen.
+    """
+    import re
+
+    for position, expected in (
+        ("bottom", {"bottom": "6vh", "top": "auto", "height": "auto"}),
+        ("top", {"top": "6vh", "bottom": "auto", "height": "auto"}),
+        ("lower-half", {"top": "50%", "height": "50%", "bottom": "auto"}),
+        ("upper-half", {"top": "0", "height": "50%", "bottom": "auto"}),
+        ("center", {"top": "0", "height": "100%", "bottom": "auto"}),
+    ):
+        cfg = C.normalise({"goal": {"enabled": True, "alert_style": "exclamation",
+                                    "alert_position": position}})
+        payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False)
+        script = (
+            HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
+            .replace("OFFSETS_PLACEHOLDER", "[11000]")
+            .replace(
+                'console.log(JSON.stringify(readings));',
+                'console.log(JSON.stringify(registry["rvp-alert"].style));',
+            )
+        )
+        out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
+        assert out.returncode == 0, out.stderr
+        style = json.loads(out.stdout)
+        for prop, value in expected.items():
+            assert style.get(prop) == value, (position, prop, style)

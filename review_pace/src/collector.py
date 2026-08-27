@@ -203,44 +203,57 @@ def _remaining_learning_reps(col, cfg, fallback: int) -> int:
 # ---------------------------------------------------------------------------
 
 
-def fetch_reviews(col, cfg, expanded: Set[int]) -> Tuple[List[S.Review], Dict[int, int], Set[int]]:
+_REVIEW_SQL = """
+    select r.id, r.cid, case when c.odid != 0 then c.odid else c.did end,
+           r.ease, r.ivl, r.lastIvl, r.time, r.type
+    from revlog r join cards c on c.id = r.cid
+    where r.id >= ?
+    order by r.id desc
+    limit ?
+"""
+
+
+def fetch_reviews(col, cfg, expanded: Set[int]) -> Tuple[List[S.Review], Dict[int, int], int]:
     """Load the review window.
 
     Rows are fetched for *every* deck and filtered afterwards: the wall-clock
     gap between two answers is real time spent even when the two cards live in
     different decks, so the gaps have to be measured on the full stream.
+
+    If the configured window holds too few reviews *for the decks being
+    reported on* -- a deck you study once a week, or a collection you have just
+    started -- the window is widened rather than an estimate being built from
+    noise.
     """
     days = int(cfg["speed"]["lookback_days"])
-    cutoff_ms = int((col.sched.day_cutoff - days * DAY) * 1000)
     limit = int(cfg["speed"]["max_rows"])
+    min_sample = int(cfg["speed"].get("min_sample", 0))
+    cutoff_ms = int((col.sched.day_cutoff - days * DAY) * 1000)
 
-    rows = col.db.all(
-        """
-        select r.id, r.cid, case when c.odid != 0 then c.odid else c.did end,
-               r.ease, r.ivl, r.lastIvl, r.time, r.type
-        from revlog r join cards c on c.id = r.cid
-        where r.id >= ?
-        order by r.id desc
-        limit ?
-        """,
-        cutoff_ms,
-        limit,
-    )
+    rows = col.db.all(_REVIEW_SQL, cutoff_ms, limit)
+    if min_sample and _scoped_count(rows, expanded) < min_sample:
+        widened = col.db.all(_REVIEW_SQL, 0, min(limit, max(min_sample * 4, 2000)))
+        if len(widened) > len(rows):
+            rows = widened
+
     reviews = [S.Review(*row) for row in rows]
+    # Rows come back newest first, so the last one marks how far back we
+    # actually reached -- which is what "first seen in this window" must use.
+    effective_cutoff = int(rows[-1][0]) if rows else cutoff_ms
 
     first_rows = col.db.all(
         "select cid, min(id) from revlog where type not in (4, 5) "
         "group by cid having min(id) >= ?",
-        cutoff_ms,
+        effective_cutoff,
     )
     first_seen = {int(cid): int(first) for cid, first in first_rows}
+    return reviews, first_seen, effective_cutoff
 
-    if expanded:
-        keep = {r.cid for r in reviews if r.did in expanded}
-        in_scope = keep
-    else:
-        in_scope = {r.cid for r in reviews}
-    return reviews, first_seen, in_scope
+
+def _scoped_count(rows, expanded: Set[int]) -> int:
+    if not expanded:
+        return len(rows)
+    return sum(1 for row in rows if row[2] in expanded)
 
 
 def period_start_ms(col, cfg, days: int) -> int:
@@ -289,7 +302,12 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
         generated_at=time.time(),
     )
 
-    reviews, first_seen, _ = fetch_reviews(col, scoped_cfg, expanded)
+    reviews, first_seen, effective_cutoff = fetch_reviews(col, scoped_cfg, expanded)
+    reached_days = max(
+        1,
+        int(round((col.sched.day_cutoff - effective_cutoff / 1000.0) / DAY)),
+    )
+    snap.lookback_days = reached_days
     timed_all = S.annotate(
         reviews,
         idle_cutoff_s=float(cfg["speed"]["idle_cutoff_s"]),

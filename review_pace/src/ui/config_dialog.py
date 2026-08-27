@@ -23,15 +23,54 @@ from .widgets import HotkeyEdit, apply_minimum_sizes, expand_fields
 GOAL_COL = 1
 
 
+def _scrolled(page: QWidget) -> QScrollArea:
+    """Put a tab's contents in a vertical scroll area.
+
+    A QFormLayout given less height than its rows need does not scroll on its
+    own -- it squeezes the rows until they overlap. Scrolling keeps every row
+    at its proper height however small the window is.
+    """
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    area.setWidget(page)
+    return area
+
+
+#: Roughly how many characters of help text fit on one line at the widths this
+#: dialog uses. Only used to reserve height, so it does not need to be exact.
+_CHARS_PER_LINE = 74
+_LINE_HEIGHT = 17
+
+
 def _label(text: str, muted: bool = True) -> QLabel:
+    """Explanatory text under a group of settings.
+
+    Word-wrapped labels report their height as a function of their width, which
+    layouts are notoriously bad at accounting for -- underestimate it and the
+    rows above end up drawn on top of each other. Reserving a floor based on
+    the text length costs nothing and removes that failure mode.
+    """
     lab = QLabel(text)
     lab.setWordWrap(True)
+    lab.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
     if muted:
         font = lab.font()
         font.setPointSizeF(max(8.0, font.pointSizeF() - 1.0))
         lab.setFont(font)
         lab.setStyleSheet("color: palette(mid);")
+    lab.setMinimumHeight(estimated_label_height(text))
+    lab.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.MinimumExpanding)
     return lab
+
+
+def estimated_label_height(text: str) -> int:
+    """A lower bound on the height wrapped ``text`` will need."""
+    lines = 0
+    for paragraph in text.split("\n"):
+        lines += max(1, -(-len(paragraph) // _CHARS_PER_LINE))
+    return lines * _LINE_HEIGHT
 
 
 class DeckTree(QTreeWidget):
@@ -152,11 +191,15 @@ class ConfigDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
         self.tabs = QTabWidget()
+        # Only the deck tab is unscrolled: it is short, and it holds a tree
+        # that does its own scrolling. The rest are taller than the dialog on
+        # a small screen, and without a scroll area Qt compresses their rows
+        # past the minimum size and they draw on top of each other.
         self.tabs.addTab(self._decks_tab(), "Decks")
-        self.tabs.addTab(self._display_tab(), "Home screen")
-        self.tabs.addTab(self._speed_tab(), "Speed && accuracy")
-        self.tabs.addTab(self._reviewer_tab(), "While reviewing")
-        self.tabs.addTab(self._toolbar_tab(), "Toolbar")
+        self.tabs.addTab(_scrolled(self._display_tab()), "Home screen")
+        self.tabs.addTab(_scrolled(self._speed_tab()), "Speed && accuracy")
+        self.tabs.addTab(_scrolled(self._reviewer_tab()), "While reviewing")
+        self.tabs.addTab(_scrolled(self._toolbar_tab()), "Toolbar")
         outer.addWidget(self.tabs)
 
         buttons = QDialogButtonBox(
@@ -405,9 +448,11 @@ class ConfigDialog(QDialog):
         self.alert_text.setMaxLength(8)
         self.alert_text.setPlaceholderText("!")
         self.alert_pos = QComboBox()
-        self.alert_pos.addItem("Lower half of the screen", "lower-half")
+        self.alert_pos.addItem("Bottom middle", "bottom")
+        self.alert_pos.addItem("Lower half", "lower-half")
         self.alert_pos.addItem("Middle of the screen", "center")
-        self.alert_pos.addItem("Upper half of the screen", "upper-half")
+        self.alert_pos.addItem("Upper half", "upper-half")
+        self.alert_pos.addItem("Top middle", "top")
         self.alert_scale = QDoubleSpinBox()
         self.alert_scale.setRange(0.5, 4.0)
         self.alert_scale.setSingleStep(0.1)

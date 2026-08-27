@@ -63,3 +63,33 @@ def test_sizing_constants_are_usable():
     assert w.MIN_HEIGHT >= 24
     assert w.MIN_TEXT_WIDTH >= 200
     assert w.MIN_NUMBER_WIDTH >= 100
+
+
+def config_module():
+    test_imports._install_stubs()
+    import importlib
+
+    return importlib.import_module("src.ui.config_dialog")
+
+
+def test_label_height_grows_with_the_text():
+    height = config_module().estimated_label_height
+    one_line = height("Short note.")
+    long_line = height("x" * 300)
+    assert one_line > 0
+    assert long_line >= one_line * 4
+
+
+def test_label_height_counts_explicit_paragraphs():
+    height = config_module().estimated_label_height
+    assert height("a\n\nb") > height("a")
+
+
+def test_every_tab_but_the_deck_list_scrolls():
+    # The deck tab scrolls itself via its tree; the others are taller than the
+    # dialog on a small screen and must not be allowed to compress.
+    import inspect
+
+    source = inspect.getsource(config_module().ConfigDialog._build)
+    assert source.count("_scrolled(") == 4
+    assert "_scrolled(self._decks_tab())" not in source
