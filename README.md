@@ -64,6 +64,10 @@ setting without sitting through a real card.
 
     python -m pytest tests
 
+The suite includes `tests/test_reviewer_js.py`, which runs the injected reviewer
+script under Node against a stub DOM and a fake clock, so the per-card timer is
+checked second by second rather than by eye. Those tests skip if Node is absent.
+
 `review_pace/src/stats.py` holds all the arithmetic and imports nothing from
 Anki, so the numbers are testable without launching the app.
 

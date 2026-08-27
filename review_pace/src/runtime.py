@@ -216,6 +216,7 @@ def _inject(card=None) -> None:
 
 @L.guard("show question")
 def _on_show_question(card) -> None:
+    _stamp_card_start()
     if config()["goal"]["start_on"] == "answer":
         # Draw the HUD now, but hold the badge back: passing no card means no
         # goal in the payload, which hides the badge until the answer is shown.
@@ -227,7 +228,15 @@ def _on_show_question(card) -> None:
 @L.guard("show answer")
 def _on_show_answer(card) -> None:
     if config()["goal"]["start_on"] == "answer":
+        _stamp_card_start()
         _inject(card)
+
+
+def _stamp_card_start() -> None:
+    """Mark the moment the card appeared, before any slow work happens."""
+    web = getattr(mw.reviewer, "web", None)
+    if web is not None:
+        web.eval(RV.stamp_script())
 
 
 @L.guard("answer card")

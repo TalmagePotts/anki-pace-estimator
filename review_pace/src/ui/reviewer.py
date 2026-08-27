@@ -144,7 +144,12 @@ _JS = r"""
     alert.className = "";
   }
 
-  var start = Date.now();
+  // The clock starts when the card appeared, not when this script ran. The
+  // stamp is injected before any database work, so a slow snapshot rebuild
+  // cannot eat into the card's time. Re-injecting mid-card (toggling the HUD,
+  // for instance) reuses the same stamp instead of restarting the timer.
+  var start = (typeof window.__rvpCardStart === "number" && window.__rvpCardStart)
+    ? window.__rvpCardStart : Date.now();
   var target = G.seconds * 1000;
   var fired = false;
   function beep() {
@@ -159,9 +164,14 @@ _JS = r"""
       osc.start(); osc.stop(ctx.currentTime + 0.32);
     } catch (e) {}
   }
-  function fmt(ms) {
+  // A countdown rounds up and a count-up rounds down. With 11.8s left a
+  // countdown still reads 12 and only reaches 0 when the time is genuinely
+  // gone; rounding the other way makes it drop a second immediately and look
+  // like it is running fast.
+  function fmt(ms, countingUp) {
     var neg = ms < 0;
-    var s = Math.round(Math.abs(ms) / 1000);
+    var abs = Math.abs(ms) / 1000;
+    var s = countingUp ? Math.floor(abs) : Math.ceil(abs);
     var m = Math.floor(s / 60);
     s = s %% 60;
     var txt = m > 0 ? m + ":" + (s < 10 ? "0" : "") + s : String(s);
@@ -171,7 +181,9 @@ _JS = r"""
     var elapsed = Date.now() - start;
     var over = elapsed >= target;
     if (G.show_timer && badge) {
-      badge.textContent = G.count_down ? fmt(target - elapsed) : fmt(elapsed);
+      badge.textContent = G.count_down
+        ? fmt(target - elapsed, false)
+        : fmt(elapsed, true);
       var recolour = over && (G.alert_style === "badge" || G.alert_style === "both");
       badge.className = recolour ? (G.pulse ? "rvp-over" : "rvp-over rvp-nopulse") : "";
     }
@@ -181,7 +193,7 @@ _JS = r"""
     if (over && !fired) { fired = true; if (G.sound) beep(); }
   }
   tick();
-  window.__rvpTimer = setInterval(tick, 200);
+  window.__rvpTimer = setInterval(tick, 100);
 })();
 """
 
@@ -261,4 +273,13 @@ def script(payload: Dict[str, Any]) -> str:
 
 
 def clear_script() -> str:
-    return script({"hud": None, "goal": None})
+    return script({"hud": None, "goal": None}) + "\nwindow.__rvpCardStart = null;"
+
+
+def stamp_script() -> str:
+    """Record when the card became visible.
+
+    Injected before the add-on does any database work, so the per-card timer
+    measures the card rather than the add-on.
+    """
+    return "window.__rvpCardStart = Date.now();"
