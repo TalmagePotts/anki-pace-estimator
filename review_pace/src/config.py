@@ -47,6 +47,9 @@ DEFAULTS: Dict[str, Any] = {
         "idle_cutoff_s": 60,
         "max_answer_s": 60,
         "per_card_class": True,
+        # Decks vary far more than card types do, so each is priced from its
+        # own history, falling back up its parents when a deck is too thin.
+        "per_deck_speeds": True,
         "count_full_learning": True,
         "include_lapses": True,
     },

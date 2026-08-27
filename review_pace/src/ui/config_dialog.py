@@ -357,6 +357,7 @@ class ConfigDialog(QDialog):
         acc_box = QGroupBox("Accuracy")
         form = QFormLayout(acc_box)
         self.per_class = QCheckBox("Measure new, young, mature and relearning cards separately")
+        self.per_deck_speeds = QCheckBox("Measure each deck separately")
         self.full_learning = QCheckBox("Count every learning step, not one answer per new card")
         self.include_lapses = QCheckBox("Allow for reviews you will fail and see again today")
         self.estimator = QComboBox()
@@ -378,6 +379,7 @@ class ConfigDialog(QDialog):
         self.max_rows.setGroupSeparatorShown(True)
 
         form.addRow("", self.per_class)
+        form.addRow("", self.per_deck_speeds)
         form.addRow("", self.full_learning)
         form.addRow("", self.include_lapses)
         form.addRow("Estimates built from", self.estimator)
@@ -411,6 +413,9 @@ class ConfigDialog(QDialog):
                 "changed accuracy by well under a point — day-to-day variation "
                 "dominates — so they are off by default. A split falls back to its "
                 "card type until it has enough samples to stand on its own.\n\n"
+                "Measuring each deck separately is the single biggest thing on this "
+                "tab: decks differ far more than card types do. A deck with too "
+                "little history of its own is priced from the deck above it.\n\n"
                 "Time of day is worth a little, but only with the guard above: "
                 "hourly averages are mostly a record of which days you studied in "
                 "which hours, so an hour has to appear on several separate days "
@@ -668,6 +673,7 @@ class ConfigDialog(QDialog):
         self.mode_wall.setChecked(s["mode"] == K.SPEED_MODE_WALL)
         self.mode_answer.setChecked(s["mode"] != K.SPEED_MODE_WALL)
         self.per_class.setChecked(s["per_card_class"])
+        self.per_deck_speeds.setChecked(s["per_deck_speeds"])
         self.full_learning.setChecked(s["count_full_learning"])
         self.include_lapses.setChecked(s["include_lapses"])
         self._set_combo(self.estimator, s["estimator"])
@@ -757,6 +763,7 @@ class ConfigDialog(QDialog):
             {
                 "mode": K.SPEED_MODE_WALL if self.mode_wall.isChecked() else K.SPEED_MODE_ANSWER,
                 "per_card_class": self.per_class.isChecked(),
+                "per_deck_speeds": self.per_deck_speeds.isChecked(),
                 "count_full_learning": self.full_learning.isChecked(),
                 "include_lapses": self.include_lapses.isChecked(),
                 "estimator": self.estimator.currentData(),

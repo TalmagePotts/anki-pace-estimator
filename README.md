@@ -68,6 +68,37 @@ None of the above is hard-coded. Under **Speed & accuracy**:
 Under **Home screen**, **Show speed as** picks whether the panel leads with the
 average, the typical (median) card, or the average with the typical underneath.
 
+### Decks are not interchangeable
+
+This is the largest effect in the whole model, and the one worth understanding.
+On the collection this was built against, second-level decks ranged from 8.3
+seconds a card to 28.7 -- a **3.4x spread**. A vocabulary deck and an
+image-heavy one are simply not the same activity. Which deck a card is in
+explains 8.7% of the variation in how long it takes; which *card type* it is
+explains 0.3%.
+
+So every deck is priced from its own review history. A deck with too little
+history of its own falls back to its parent deck, and only then to the whole
+selection, so a brand-new subdeck inside a well-established tree is still
+priced sensibly. Predicting a single deck's study time improves from 30.8% to
+28.5% average error, but the real difference shows up in the numbers a person
+actually looks at:
+
+    100 cards due in "A Frequency Dictionary of Spanish"
+       priced from that deck   15m
+       one collection-wide rate 26m
+
+    100 cards due in "Ankidrone Foundation V7"
+       priced from that deck   47m
+       one collection-wide rate 26m
+
+A single blended rate gives the same answer for both, and is wrong by a factor
+of three in opposite directions.
+
+When several decks are in scope, each is priced separately and the results are
+combined -- variances add, so the combined range is tighter than the sum of the
+individual ranges rather than assuming every deck runs slow at once.
+
 ### Time of day
 
 Hourly averages are the most misleading statistic in this whole add-on. On the

@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 
@@ -450,3 +451,97 @@ def test_estimate_applies_hour_factors_only_when_given_a_clock():
     speeds.hour_factors = {10: 2.0, 11: 2.0}
     assert S.estimate(work, speeds, beh).seconds == 600  # no clock, no effect
     assert abs(S.estimate(work, speeds, beh, start_epoch=start).seconds - 1200) < 1
+
+
+# ---------------------------------------------------------------------------
+# Per-deck speeds
+# ---------------------------------------------------------------------------
+
+# 10 is the parent of 11 and 12.
+ANCESTORS = {10: [10], 11: [11, 10], 12: [12, 10]}
+
+
+def deck_rev(did, secs, cid, offset=0):
+    return S.Review(offset + cid * 20_000, cid, did, 3, 100, 100,
+                    int(secs * 1000), S.RT_REVIEW, 2500)
+
+
+def test_a_review_counts_toward_its_deck_and_every_parent():
+    rows = [deck_rev(11, 5, i) for i in range(30)]
+    speeds = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1), "mean",
+                              ancestors_of=ANCESTORS)
+    assert speeds.per_deck[(11, S.MATURE)].n == 30
+    assert speeds.per_deck[(10, S.MATURE)].n == 30   # the parent sees it too
+    assert speeds.per_deck[(11, None)].n == 30       # and the deck's overall
+
+
+def test_each_deck_is_priced_from_its_own_history():
+    rows = [deck_rev(11, 4, i) for i in range(30)]
+    rows += [deck_rev(12, 24, 100 + i, offset=10 ** 7) for i in range(30)]
+    speeds = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1), "mean",
+                              ancestors_of=ANCESTORS)
+    assert abs(speeds.deck_view([11, 10]).overall.wall - 4) < 0.2
+    assert abs(speeds.deck_view([12, 10]).overall.wall - 24) < 0.2
+    # The parent sees both, so it lands between them.
+    assert 4 < speeds.deck_view([10]).overall.wall < 24
+
+
+def test_a_thin_deck_falls_back_to_its_parent():
+    rows = [deck_rev(11, 4, i) for i in range(40)]
+    rows += [deck_rev(12, 30, 500, offset=10 ** 7)]  # one card only
+    speeds = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1), "mean",
+                              ancestors_of=ANCESTORS)
+    thin = speeds.for_deck([12, 10], S.MATURE)
+    parent = speeds.per_deck[(10, S.MATURE)]
+    assert thin is parent            # not priced off a single card
+    assert speeds.for_deck([999], S.MATURE) is None   # unknown deck: no opinion
+
+
+def test_deck_view_is_a_no_op_without_deck_data():
+    rows = [deck_rev(11, 5, i) for i in range(30)]
+    speeds = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1), "mean")
+    assert speeds.deck_view([11, 10]) is speeds
+    assert speeds.deck_view([]) is speeds
+
+
+def test_deck_view_keeps_the_shared_adjustments():
+    rows = [deck_rev(11, 5, i) for i in range(30)]
+    speeds = S.compute_speeds(S.annotate(rows, idle_cutoff_s=1), "mean",
+                              ancestors_of=ANCESTORS)
+    speeds.day_cv = 0.3
+    speeds.hour_factors = {4: 1.5}
+    view = speeds.deck_view([11, 10])
+    assert view.day_cv == 0.3
+    assert view.hour_factors == {4: 1.5}
+
+
+def test_combining_decks_adds_variances_not_upper_bounds():
+    # Two decks that each might run slow are unlikely to both run slow at once,
+    # so the combined range must be tighter than the sum of their ranges.
+    speeds = S.Speeds(
+        per_class={S.MATURE: S.ClassSpeed(n=200, answer=10, wall=10, wall_sd=6)},
+        overall=S.ClassSpeed(n=200, answer=10, wall=10, wall_sd=6),
+    )
+    beh = S.Behaviour(lapse_rate=0.0)
+    one = S.estimate(S.Workload(review_cards=50), speeds, beh)
+    both = S.estimate_many(
+        [S.DeckWork("A", S.Workload(review_cards=50), speeds),
+         S.DeckWork("B", S.Workload(review_cards=50), speeds)],
+        beh,
+    )
+    assert both.seconds == one.seconds * 2
+    assert both.seconds_slow < one.seconds_slow * 2
+    spread_one = one.seconds_slow - one.seconds
+    spread_both = both.seconds_slow - both.seconds
+    assert abs(spread_both - spread_one * math.sqrt(2)) < 1e-6
+
+
+def test_combined_parts_are_labelled_by_deck():
+    speeds = S.Speeds(overall=S.ClassSpeed(n=200, answer=10, wall=10))
+    est = S.estimate_many(
+        [S.DeckWork("Spanish", S.Workload(review_cards=10), speeds),
+         S.DeckWork("Pharm", S.Workload(review_cards=10), speeds)],
+        S.Behaviour(lapse_rate=0.0),
+    )
+    labels = [p.label for p in est.parts]
+    assert "Spanish: Reviews" in labels and "Pharm: Reviews" in labels

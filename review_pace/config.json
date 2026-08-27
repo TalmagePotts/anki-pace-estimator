@@ -18,6 +18,7 @@
     "idle_cutoff_s": 60,
     "max_answer_s": 60,
     "per_card_class": true,
+    "per_deck_speeds": true,
     "count_full_learning": true,
     "include_lapses": true
   },

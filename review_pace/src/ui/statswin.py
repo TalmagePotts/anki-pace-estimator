@@ -80,15 +80,20 @@ def render_report(snap: Snapshot, cfg) -> str:
                     str(line.new),
                     str(line.learning),
                     str(total),
+                    K.fmt_secs_per_card(line.secs_per_card),
                     K.fmt_duration(line.seconds),
                 ]
             )
         parts.append(
-            '<div class="rvp-sec"><h2>By deck</h2>%s</div>'
+            '<div class="rvp-sec"><h2>By deck</h2>%s'
+            '<div class="rvp-note">Each deck is priced from its own review history, '
+            "falling back to the deck above it when it has too little of one. Decks "
+            "differ far more than card types do, so a single collection-wide rate "
+            "would misprice most of them.</div></div>"
             % _table(
-                ["Deck", "Due", "New", "Learning", "Total", "Est. time"],
+                ["Deck", "Due", "New", "Learning", "Total", "Speed", "Est. time"],
                 rows,
-                "lrrrrr",
+                "lrrrrrr",
             )
         )
 

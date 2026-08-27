@@ -26,6 +26,8 @@ class DeckLine:
     learning: int = 0
     review: int = 0
     seconds: float = 0.0
+    #: Seconds per card this deck was priced at, for the breakdown table.
+    secs_per_card: float = 0.0
 
 
 @dataclass
@@ -42,6 +44,8 @@ class Snapshot:
     week: S.DoneTotals = field(default_factory=S.DoneTotals)
     month: S.DoneTotals = field(default_factory=S.DoneTotals)
     per_deck: List[DeckLine] = field(default_factory=list)
+    #: Deck id -> itself and its parents, used to price each deck.
+    ancestors: Dict[int, List[int]] = field(default_factory=dict)
     sample_size: int = 0
     lookback_days: int = 30
     day_cutoff: int = 0
@@ -74,6 +78,29 @@ class Snapshot:
 # ---------------------------------------------------------------------------
 # Deck resolution
 # ---------------------------------------------------------------------------
+
+
+def deck_ancestors(col) -> Dict[int, List[int]]:
+    """Map every deck to itself followed by each of its parents.
+
+    Used to price a deck from its own history where it has enough of one, and
+    from the deck above it where it does not.
+    """
+    by_name: Dict[str, int] = {}
+    for entry in col.decks.all_names_and_ids(
+        skip_empty_default=False, include_filtered=True
+    ):
+        by_name[entry.name] = int(entry.id)
+    out: Dict[int, List[int]] = {}
+    for name, did in by_name.items():
+        parts = name.split("::")
+        chain = []
+        for depth in range(len(parts), 0, -1):
+            ancestor = by_name.get("::".join(parts[:depth]))
+            if ancestor is not None:
+                chain.append(ancestor)
+        out[did] = chain or [did]
+    return out
 
 
 def all_deck_rows(col) -> List[Tuple[int, str]]:
@@ -384,6 +411,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
     snap.sample_size = len(timed)
 
     features = tuple(cfg["speed"]["features"])
+    snap.ancestors = deck_ancestors(col) if cfg["speed"]["per_deck_speeds"] else {}
     snap.speeds = S.compute_speeds(
         timed,
         cfg["speed"]["estimator"],
@@ -394,6 +422,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
             else None
         ),
         hour_min_days=int(cfg["speed"]["time_of_day_min_days"]),
+        ancestors_of=snap.ancestors or None,
     )
     if not cfg["speed"]["per_card_class"]:
         # Collapse to a single figure by making every class defer to the
@@ -405,15 +434,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
 
     snap.workload, snap.per_deck = gather_workload(col, scoped_cfg, selected)
     snap.workload.review_buckets = review_buckets(col, expanded, snap.workload, features)
-    snap.estimate = S.estimate(
-        snap.workload,
-        snap.speeds,
-        snap.behaviour,
-        mode=cfg["speed"]["mode"],
-        count_full_learning=cfg["speed"]["count_full_learning"],
-        include_lapses=cfg["speed"]["include_lapses"],
-        start_epoch=time.time(),
-    )
+    snap.estimate = estimate_snapshot(snap, cfg)
 
     mode = cfg["speed"]["mode"]
     snap.today = S.totals_since(timed, period_start_ms(col, cfg, 1), first_seen, mode)
@@ -458,26 +479,76 @@ def review_buckets(col, expanded: Set[int], workload: S.Workload,
     return {k: v / total * workload.review_cards for k, v in counts.items()}
 
 
+def _deck_entries(snap: Snapshot, cfg) -> List[S.DeckWork]:
+    """Split the workload across decks, each priced with its own speeds.
+
+    The deck tree's per-deck counts and the authoritative totals are derived
+    slightly differently, so the totals are shared out in proportion rather
+    than trusted to add up on their own.
+    """
+    work = snap.workload
+    lines = snap.per_deck
+    if not lines or not snap.ancestors:
+        return [S.DeckWork("", work, snap.speeds)]
+
+    sums = {
+        "new": float(sum(l.new for l in lines)),
+        "review": float(sum(l.review for l in lines)),
+        "learning": float(sum(l.learning for l in lines)),
+    }
+    entries: List[S.DeckWork] = []
+    for line in lines:
+        review_share = (line.review / sums["review"]) if sums["review"] else 0.0
+        entries.append(
+            S.DeckWork(
+                label=line.name,
+                workload=S.Workload(
+                    new_cards=_share(line.new, sums["new"], work.new_cards),
+                    review_cards=_share(line.review, sums["review"], work.review_cards),
+                    learning_reps=_share(
+                        line.learning, sums["learning"], work.learning_reps
+                    ),
+                    review_buckets={
+                        k: v * review_share for k, v in work.review_buckets.items()
+                    },
+                ),
+                speeds=snap.speeds.deck_view(snap.ancestors.get(line.deck_id, ())),
+            )
+        )
+    return entries
+
+
+def _share(part: float, total: float, authoritative: float) -> float:
+    return (part / total * authoritative) if total else 0.0
+
+
+def estimate_snapshot(snap: Snapshot, cfg) -> S.Estimate:
+    return S.estimate_many(
+        _deck_entries(snap, cfg),
+        snap.behaviour,
+        mode=cfg["speed"]["mode"],
+        count_full_learning=cfg["speed"]["count_full_learning"],
+        include_lapses=cfg["speed"]["include_lapses"],
+        start_epoch=time.time(),
+        day_cv=snap.speeds.day_cv,
+        hour_factors=snap.speeds.hour_factors,
+    )
+
+
 def _fill_per_deck_estimates(snap: Snapshot, cfg) -> None:
-    total_reviews = float(sum(l.review for l in snap.per_deck)) or 1.0
-    for line in snap.per_deck:
-        share = line.review / total_reviews
-        buckets = {k: v * share for k, v in snap.workload.review_buckets.items()}
-        est = S.estimate(
-            S.Workload(
-                new_cards=line.new,
-                review_cards=line.review,
-                learning_reps=line.learning,
-                review_buckets=buckets,
-            ),
-            snap.speeds,
+    for entry, line in zip(_deck_entries(snap, cfg), snap.per_deck):
+        est = S.estimate_many(
+            [S.DeckWork("", entry.workload, entry.speeds)],
             snap.behaviour,
             mode=cfg["speed"]["mode"],
             count_full_learning=cfg["speed"]["count_full_learning"],
             include_lapses=cfg["speed"]["include_lapses"],
             start_epoch=time.time(),
+            day_cv=snap.speeds.day_cv,
+            hour_factors=snap.speeds.hour_factors,
         )
         line.seconds = est.seconds
+        line.secs_per_card = entry.speeds.overall.pick(cfg["speed"]["mode"])
     snap.per_deck.sort(key=lambda l: l.seconds, reverse=True)
 
 
@@ -541,8 +612,6 @@ def refresh_workload(snap: Snapshot, col, cfg) -> Snapshot:
         snap.behaviour,
         mode=cfg["speed"]["mode"],
         count_full_learning=cfg["speed"]["count_full_learning"],
-        include_lapses=cfg["speed"]["include_lapses"],
-        start_epoch=time.time(),
     )
     _fill_per_deck_estimates(snap, cfg)
     return snap

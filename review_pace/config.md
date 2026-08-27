@@ -11,6 +11,8 @@ proper settings dialog with a deck picker. Editing the JSON here works too.
 - **speed.features** — any of `ease`, `interval`. Extra ways to split the speed
   measurement on top of card type. Off by default.
 - **speed.min_sample** — widen the window automatically below this many reviews.
+- **speed.per_deck_speeds** — price each deck from its own history, falling
+  back to its parent deck. The largest single accuracy setting here.
 - **speed.time_of_day** — adjust the estimate for the hour you study in.
 - **speed.time_of_day_min_days** — an hour must span this many separate days
   before it may move an estimate. Lowering it is not advised; see the README.

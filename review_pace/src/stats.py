@@ -321,6 +321,10 @@ class Speeds:
     hour_days: Dict[int, int] = field(default_factory=dict)
     #: Multipliers applied to the estimate per hour. Empty when switched off.
     hour_factors: Dict[int, float] = field(default_factory=dict)
+    #: Speed per ``(deck id, card class)``, where the deck id is the deck the
+    #: review happened in *or any of its parents*, so a thin subdeck can fall
+    #: back up its own tree. A ``None`` class holds the deck's overall speed.
+    per_deck: Dict[tuple, ClassSpeed] = field(default_factory=dict)
 
     def for_class(self, cls: str) -> ClassSpeed:
         """Speed for a class, falling back to the overall figure when a class
@@ -332,6 +336,43 @@ class Speeds:
 
     def secs(self, cls: str, mode: str, slow: bool = False) -> float:
         return self.for_class(cls).pick(mode, slow)
+
+    def for_deck(self, ancestors: Sequence[int], cls: Optional[str]) -> Optional[ClassSpeed]:
+        """Speed for a deck, walking up its parents until the data is enough.
+
+        Decks differ far more than card types do -- a vocabulary deck and an
+        image-heavy one are not the same activity -- so a deck is priced from
+        its own history where it has one, its parent's where it does not, and
+        the whole selection only as a last resort.
+        """
+        for deck_id in ancestors:
+            cs = self.per_deck.get((deck_id, cls))
+            if cs is not None and cs.n >= MIN_SAMPLES:
+                return cs
+        return None
+
+    def deck_view(self, ancestors: Sequence[int]) -> "Speeds":
+        """A copy of these speeds priced for one deck."""
+        if not self.per_deck or not ancestors:
+            return self
+        per_class = {}
+        for cls in CLASSES:
+            cs = self.for_deck(ancestors, cls)
+            if cs is not None:
+                per_class[cls] = cs
+        overall = self.for_deck(ancestors, None) or self.overall
+        return Speeds(
+            per_class=per_class or self.per_class,
+            overall=overall,
+            overhead_ratio=self.overhead_ratio,
+            day_cv=self.day_cv,
+            per_key=self.per_key,
+            features=self.features,
+            hour_speeds=self.hour_speeds,
+            hour_days=self.hour_days,
+            hour_factors=self.hour_factors,
+            per_deck=self.per_deck,
+        )
 
     def for_key(self, key: tuple) -> ClassSpeed:
         """Speed for a feature bucket, falling back to its card class.
@@ -423,12 +464,34 @@ def day_variation(timed: Sequence[TimedReview], mode: str = "wall") -> float:
     return min(MAX_DAY_CV, stdev(means) / grand)
 
 
+def compute_deck_speeds(
+    timed: Sequence[TimedReview],
+    method: str,
+    ancestors_of: Dict[int, Sequence[int]],
+) -> Dict[tuple, ClassSpeed]:
+    """Speeds per deck and per parent deck.
+
+    Each review is counted into its own deck *and* every deck above it, so a
+    parent always has at least as much evidence as its children combined.
+    """
+    buckets: Dict[tuple, List[TimedReview]] = {}
+    for t in timed:
+        cls = classify(t.review)
+        if cls is None:
+            continue
+        for deck_id in ancestors_of.get(t.review.did, (t.review.did,)):
+            buckets.setdefault((deck_id, cls), []).append(t)
+            buckets.setdefault((deck_id, None), []).append(t)
+    return {k: _class_speed(v, method) for k, v in buckets.items()}
+
+
 def compute_speeds(
     timed: Sequence[TimedReview],
     method: str = "mean",
     features: Sequence[str] = (),
     hour_shrinkage: Optional[float] = None,
     hour_min_days: int = DEFAULT_HOUR_MIN_DAYS,
+    ancestors_of: Optional[Dict[int, Sequence[int]]] = None,
 ) -> Speeds:
     features = tuple(f for f in features if f in ALL_FEATURES)
     buckets: Dict[str, List[TimedReview]] = {c: [] for c in CLASSES}
@@ -454,6 +517,8 @@ def compute_speeds(
     if total_wall > 0:
         speeds.overhead_ratio = sum(t.overhead_s for t in usable) / total_wall
     speeds.day_cv = day_variation(usable)
+    if ancestors_of:
+        speeds.per_deck = compute_deck_speeds(usable, method, ancestors_of)
     speeds.hour_speeds, speeds.hour_days = compute_hour_speeds(usable, method)
     if hour_shrinkage is not None:
         speeds.hour_factors = hour_factors_from(
@@ -610,33 +675,16 @@ class Estimate:
 Z80 = 0.8416
 
 
-def estimate(
+def _build_parts(
     workload: Workload,
     speeds: Speeds,
     behaviour: Behaviour,
-    mode: str = "wall",
-    count_full_learning: bool = True,
-    include_lapses: bool = True,
-    start_epoch: Optional[float] = None,
-) -> Estimate:
-    """Turn a workload into an ETA.
-
-    The accuracy of this function comes from three places that a flat
-    "seconds x cards" estimate misses:
-
-    * a new card is not one answer -- it is ``reps_per_new`` answers, measured
-      from your own history rather than assumed from the deck preset;
-    * cards mid-way through learning still owe their remaining steps;
-    * a share of today's reviews will be failed and come back as relearning
-      answers within the same session.
-
-    The upper bound is *not* "every card takes as long as your slowest cards".
-    Over hundreds of answers the slow ones are cancelled out by the fast ones,
-    so per-card spread is propagated as a variance -- it grows with the square
-    root of the workload, not linearly.  What does move a whole session
-    together is your own day-to-day form, so that is added as a separate,
-    proportional term.
-    """
+    mode: str,
+    count_full_learning: bool,
+    include_lapses: bool,
+    prefix: str = "",
+) -> Tuple[List[EtaPart], float]:
+    """Price one workload, returning its parts and their combined variance."""
     parts: List[EtaPart] = []
     variance = 0.0
 
@@ -644,7 +692,7 @@ def estimate(
         nonlocal variance
         if reps <= 0 or secs <= 0:
             return
-        parts.append(EtaPart(label, reps, secs))
+        parts.append(EtaPart(prefix + label if prefix else label, reps, secs))
         variance += reps * sd * sd
 
     rpn = max(1.0, behaviour.reps_per_new) if count_full_learning else 1.0
@@ -684,18 +732,102 @@ def estimate(
             if lapse_reps >= 0.5:
                 add("Expected lapses", lapse_reps, relearn.pick(mode), relearn.sd(mode))
 
+    return parts, variance
+
+
+@dataclass
+class DeckWork:
+    """One deck's workload, priced with that deck's own speeds."""
+
+    label: str
+    workload: Workload
+    speeds: Speeds
+
+
+def estimate_many(
+    entries: Sequence[DeckWork],
+    behaviour: Behaviour,
+    mode: str = "wall",
+    count_full_learning: bool = True,
+    include_lapses: bool = True,
+    start_epoch: Optional[float] = None,
+    day_cv: float = 0.0,
+    hour_factors: Optional[Dict[int, float]] = None,
+) -> Estimate:
+    """Combine several separately-priced workloads into one estimate.
+
+    Variances add, standard deviations do not, so the decks are combined here
+    rather than by summing their individual upper bounds -- which would imply
+    every deck runs slow at once.
+    """
+    parts: List[EtaPart] = []
+    variance = 0.0
+    for entry in entries:
+        got, var = _build_parts(
+            entry.workload,
+            entry.speeds,
+            behaviour,
+            mode,
+            count_full_learning,
+            include_lapses,
+            prefix="%s: " % entry.label if entry.label else "",
+        )
+        parts.extend(got)
+        variance += var
+
     total = sum(p.seconds for p in parts)
-    day_swing = total * speeds.day_cv
+    day_swing = total * day_cv
     spread = math.sqrt(variance + day_swing * day_swing)
     slow = total + Z80 * spread
-    if speeds.hour_factors and start_epoch is not None:
-        total = stretch_over_hours(total, start_epoch, speeds.hour_factors)
-        slow = stretch_over_hours(slow, start_epoch, speeds.hour_factors)
+    if hour_factors and start_epoch is not None:
+        total = stretch_over_hours(total, start_epoch, hour_factors)
+        slow = stretch_over_hours(slow, start_epoch, hour_factors)
     return Estimate(
         seconds=total,
         seconds_slow=slow,
         total_reps=sum(p.reps for p in parts),
         parts=parts,
+    )
+
+
+def estimate(
+    workload: Workload,
+    speeds: Speeds,
+    behaviour: Behaviour,
+    mode: str = "wall",
+    count_full_learning: bool = True,
+    include_lapses: bool = True,
+    start_epoch: Optional[float] = None,
+) -> Estimate:
+    """Turn a single workload into an ETA.
+
+    The accuracy of this function comes from four places that a flat
+    "seconds x cards" estimate misses:
+
+    * a new card is not one answer -- it is ``reps_per_new`` answers, measured
+      from your own history rather than assumed from the deck preset;
+    * cards mid-way through learning still owe their remaining steps;
+    * a share of today's reviews will be failed and come back as relearning
+      answers within the same session;
+    * decks and card types are priced separately, because they are not the
+      same activity.
+
+    The upper bound is *not* "every card takes as long as your slowest cards".
+    Over hundreds of answers the slow ones are cancelled out by the fast ones,
+    so per-card spread is propagated as a variance -- it grows with the square
+    root of the workload, not linearly.  What does move a whole session
+    together is your own day-to-day form, so that is added as a separate,
+    proportional term.
+    """
+    return estimate_many(
+        [DeckWork("", workload, speeds)],
+        behaviour,
+        mode,
+        count_full_learning,
+        include_lapses,
+        start_epoch,
+        day_cv=speeds.day_cv,
+        hour_factors=speeds.hour_factors,
     )
 
 
