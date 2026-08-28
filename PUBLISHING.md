@@ -37,6 +37,11 @@ Do not upload a package you have not installed from. In Anki:
 5. Submit. AnkiWeb assigns a numeric ID and a page at
    `https://ankiweb.net/shared/info/<id>`.
 
+## The add-on's identity
+
+    AnkiWeb code : 1873683060
+    AnkiWeb page : https://ankiweb.net/shared/info/1873683060
+
 ## 5. Releasing an update
 
 Bump `human_version` in `pace_estimator/manifest.json`, run `./build.sh`, then use

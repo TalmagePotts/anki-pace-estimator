@@ -1,5 +1,7 @@
 # AnkiWeb listing
 
+Published: code `1873683060`, at <https://ankiweb.net/shared/info/1873683060>.
+
 Everything here is meant to be pasted into the upload form at
 <https://ankiweb.net/shared/addons/>.
 

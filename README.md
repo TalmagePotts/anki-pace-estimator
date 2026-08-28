@@ -197,8 +197,11 @@ selected rather than your whole collection; that accounts for most surprises.
 
 ## Installing
 
-**From AnkiWeb** — Tools ▸ Add-ons ▸ Get Add-ons, and paste the code from the
-add-on's AnkiWeb page.
+In Anki: **Tools ▸ Add-ons ▸ Get Add-ons**, and paste this code:
+
+    1873683060
+
+Then restart Anki. The add-on's page is at <https://ankiweb.net/shared/info/1873683060>.
 
 **From a file** — download the `.ankiaddon` and use Tools ▸ Add-ons ▸ Install
 from file. Requires Anki 23.10 or later; developed and tested against 26.8.
