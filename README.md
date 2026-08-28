@@ -5,13 +5,10 @@ into an honest estimate of how long today's workload will take.
 
 ![The panel on the deck list](docs/images/home.png)
 
-An Anki add-on that measures how fast you actually answer cards and turns that
-into an honest estimate of how long today's workload will take.
-
 ## Why the estimate differs from other add-ons
 
-Most speed add-ons multiply "cards due" by one average seconds-per-card. Three
-things make that wrong, and Pace Estimator fixes all three:
+Most speed add-ons multiply "cards due" by one average seconds-per-card. Four
+things make that wrong, and Pace Estimator fixes all four:
 
 1. **A new card is not one answer.** With learning steps it is two, three or
    more. Pace Estimator measures your real answers-per-new-card from your review
