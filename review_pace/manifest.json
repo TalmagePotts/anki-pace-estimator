@@ -1,7 +1,8 @@
 {
   "package": "review_pace",
   "name": "Review Pace",
+  "human_version": "1.0.0",
   "homepage": "",
   "conflicts": [],
-  "mod": 0
+  "min_point_version": 231000
 }

@@ -175,6 +175,20 @@ editing a single card template. **Preview it here** on the settings tab runs the
 whole thing on the current screen with a shortened goal, so you can check a
 setting without sitting through a real card.
 
+## Installing
+
+**From AnkiWeb** — Tools ▸ Add-ons ▸ Get Add-ons, and paste the code from the
+add-on's AnkiWeb page.
+
+**From a file** — download the `.ankiaddon` and use Tools ▸ Add-ons ▸ Install
+from file. Requires Anki 23.10 or later; developed and tested against 26.8.
+
+## Publishing
+
+See `PUBLISHING.md`. `./build.sh` runs the tests, strips `__pycache__` and
+`meta.json`, and writes `dist/review_pace.ankiaddon` with the files at the top
+level of the archive, which is what AnkiWeb requires.
+
 ## Development
 
     python -m pytest tests

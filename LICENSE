@@ -1,0 +1,9 @@
+PLACEHOLDER — this is not a licence.
+
+Review Pace links against Anki, which is licensed AGPL-3.0, so the safe and
+conventional choice for an add-on is the same licence. Replace this file with
+the real text before building a release:
+
+    curl -o LICENSE https://www.gnu.org/licenses/agpl-3.0.txt
+
+build.sh refuses to package until this file contains the actual licence.
