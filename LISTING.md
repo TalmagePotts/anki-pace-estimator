@@ -49,11 +49,16 @@ block can be turned off and reordered.
 
 **Per-card time goal**
 
-Set a target seconds-per-card, globally or per deck. A timer counts down and a
-warning fires when you go over — a large symbol at the bottom of the screen, a
-red timer, or both. The timer and the warning are independent, and the question
-and answer sides can have separate clocks. It is drawn by the add-on, so it
-works on every note type without editing a single card template.
+Off unless you want it. Switched on, it stays out of the way: no timer on
+screen, and a large symbol at the bottom only if a card ran over time and you
+have already turned it over — so it never becomes a hint that you are
+struggling to recall the answer.
+
+Set a target seconds-per-card, globally or per deck. If you would rather watch
+the clock, a countdown timer can be switched on, in any corner, counting up or
+down. The timer and the warning are independent, and the question and answer
+sides can have separate clocks. It is all drawn by the add-on, so it works on
+every note type without editing a single card template.
 
 **Calibration**
 

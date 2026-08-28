@@ -100,8 +100,9 @@ def test_percentage_warning_is_dropped_from_old_configs():
 
 
 def test_bad_alert_values_are_repaired():
-    cfg = C.normalise({"goal": {"alert_style": "sparkles", "alert_position": "sideways",
-                                "alert_text": "   ", "badge_position": "middle"}})
+    cfg = C.normalise({"goal": {"show_timer": True, "alert_style": "sparkles",
+                                "alert_position": "sideways", "alert_text": "   ",
+                                "badge_position": "middle"}})
     assert cfg["goal"]["alert_style"] == "badge"
     assert cfg["goal"]["alert_position"] == "bottom"
     assert cfg["goal"]["alert_text"] == "!"
@@ -186,3 +187,28 @@ def test_a_newly_added_component_arrives_switched_on():
     assert states["session"] is True
     assert states["breakdown"] is False  # ships off, stays off
     assert list(states)[0] == "eta"      # the user's ordering is still respected
+
+
+def test_shipped_goal_defaults_are_quiet():
+    """Off by default, and unobtrusive the moment it is switched on.
+
+    Someone enabling this wants to know when a card ran long, not a clock
+    ticking at them -- and a warning on the question side would double as a
+    hint that they are struggling to recall the answer.
+    """
+    goal = C.normalise({})["goal"]
+    assert goal["enabled"] is False
+    assert goal["show_timer"] is False
+    assert goal["alert_style"] == "exclamation"
+    assert goal["alert_phase"] == "answer"
+    assert goal["alert_position"] == "bottom"
+    assert goal["timer_phase"] == "whole_card"   # times the card, not just the answer
+
+
+def test_switching_the_goal_on_changes_nothing_else():
+    on = C.normalise({"goal": {"enabled": True}})["goal"]
+    off = C.normalise({})["goal"]
+    assert on["enabled"] is True
+    assert {k: v for k, v in on.items() if k != "enabled"} == {
+        k: v for k, v in off.items() if k != "enabled"
+    }

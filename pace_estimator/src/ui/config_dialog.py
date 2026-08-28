@@ -537,9 +537,12 @@ class ConfigDialog(QDialog):
         lay.addWidget(
             _label(
                 "The warning fires at exactly the time you set above — there is no "
-                "early stage. Turn the timer off and pick “Big symbol” if you would "
-                "rather see nothing at all until you are out of time. Per-deck times "
-                "are set on the Decks tab.\n\n"
+                "early stage. As shipped there is no timer on screen at all: the "
+                "clock runs quietly across the whole card and a large symbol appears "
+                "only if you are over time once you have turned the card over, so it "
+                "never becomes a hint that you are struggling to recall something. "
+                "Switch the timer on if you would rather watch the clock. Per-deck "
+                "times are set on the Decks tab.\n\n"
                 "“Clock runs” and “Warn me on” are independent: you can time the "
                 "whole card but only be warned once the answer is showing, or give "
                 "the answer its own separate allowance. “Time for the answer” "

@@ -103,3 +103,11 @@ def test_filtered_cards_use_their_home_deck_s_time():
     # A card in a filtered deck keeps its original deck in ``odid``.
     overrides = {"seconds_per_card": 12, "per_deck_seconds": {"7": 30}}
     assert decide(overrides, QUESTION, FakeCard(did=999, odid=7))[0] == 30.0
+
+
+def test_shipped_defaults_run_the_clock_but_warn_only_on_the_answer():
+    runtime = runtime_with({})          # goal switched on, everything else default
+    q = runtime._goal_for_phase(FakeCard(), QUESTION)
+    a = runtime._goal_for_phase(FakeCard(), ANSWER)
+    assert q == (12.0, True, False)     # clock starts, nothing may show yet
+    assert a == (12.0, False, True)     # same clock continues, warning allowed

@@ -130,7 +130,8 @@ def test_reviewer_payload_and_script():
         sess.record(6000)
     payload = RV.build_payload(make_snapshot(), cfg, sess, 12.0, True)
     assert payload["goal"]["seconds"] == 12.0
-    assert payload["goal"]["show_timer"] is True
+    assert payload["goal"]["show_timer"] is False   # ships off
+    assert payload["goal"]["alert_style"] == "exclamation"
     assert "eta" in payload["hud"]["html"]
     js = RV.script(payload)
     assert js.count("(") == js.count(")")

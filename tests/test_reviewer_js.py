@@ -67,8 +67,13 @@ console.log(JSON.stringify(readings));
 """
 
 
+#: These tests are about the timer, so they switch it on. It ships off: the
+#: shipped default is a warning with no timer at all.
+TIMER_ON = {"enabled": True, "show_timer": True}
+
+
 def run_timer(goal_overrides, offsets_ms, goal_seconds=10.0):
-    cfg = C.normalise({"goal": dict({"enabled": True}, **goal_overrides)})
+    cfg = C.normalise({"goal": dict(TIMER_ON, **goal_overrides)})
     payload = RV.build_payload(None, cfg, LiveSession(), goal_seconds, False)
     assert payload["goal"] is not None, "the goal was disabled by normalise()"
     script = (
@@ -110,7 +115,7 @@ def test_minutes_are_formatted():
 def test_timer_uses_the_card_stamp_not_the_injection_time():
     # Simulate the add-on spending 2s on database work before injecting: the
     # card's clock must already be 2s in, not restarting from the goal.
-    cfg = C.normalise({"goal": {"enabled": True, "count_down": True}})
+    cfg = C.normalise({"goal": dict(TIMER_ON, count_down=True)})
     payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False)
     script = (
         HARNESS.replace(
@@ -202,7 +207,7 @@ def test_every_alert_position_is_pinned_correctly():
 
 def test_warning_can_be_suppressed_for_this_side_of_the_card():
     """``alert_enabled`` off means the clock runs but nothing fires."""
-    cfg = C.normalise({"goal": {"enabled": True, "alert_style": "both"}})
+    cfg = C.normalise({"goal": dict(TIMER_ON, alert_style="both")})
     payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False, alert_enabled=False)
     script = (
         HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
@@ -217,7 +222,7 @@ def test_warning_can_be_suppressed_for_this_side_of_the_card():
 
 
 def test_warning_fires_when_enabled_for_this_side():
-    cfg = C.normalise({"goal": {"enabled": True, "alert_style": "both"}})
+    cfg = C.normalise({"goal": dict(TIMER_ON, alert_style="both")})
     payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False, alert_enabled=True)
     script = (
         HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
@@ -227,3 +232,18 @@ def test_warning_fires_when_enabled_for_this_side():
     readings = json.loads(out.stdout)
     assert "pace-over" in readings[0]["timerClass"]
     assert readings[0]["alertShown"] is True
+
+
+def test_shipped_defaults_show_nothing_until_time_is_up():
+    """The combination the add-on ships with, driven end to end."""
+    cfg = C.normalise({"goal": {"enabled": True}})
+    payload = RV.build_payload(None, cfg, LiveSession(), 10.0, False)
+    script = (
+        HARNESS.replace("SCRIPT_PLACEHOLDER", RV.script(payload))
+        .replace("OFFSETS_PLACEHOLDER", json.dumps([0, 5000, 9999, 10000, 20000]))
+    )
+    out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
+    assert out.returncode == 0, out.stderr
+    readings = json.loads(out.stdout)
+    assert all(r["timer"] is None for r in readings)          # no timer, ever
+    assert [r["alertShown"] for r in readings] == [False, False, False, True, True]

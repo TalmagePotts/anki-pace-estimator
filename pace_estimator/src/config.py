@@ -101,11 +101,15 @@ DEFAULTS: Dict[str, Any] = {
         "per_deck_seconds": {},  # {"<deck id>": seconds}
         # The running timer and the out-of-time warning are independent: you
         # can have a timer with no warning, a warning with no timer, or both.
-        "show_timer": True,
+        # The shipped combination is the least intrusive one that still helps:
+        # nothing on screen at all until you are out of time, and then only
+        # once you have turned the card over, so the warning never becomes a
+        # hint that you are taking too long to recall something.
+        "show_timer": False,
         "count_down": True,
         "badge_position": "top-right",
         "scale": 1.0,
-        "alert_style": "badge",  # "none", "badge", "exclamation" or "both"
+        "alert_style": "exclamation",  # "none", "badge", "exclamation" or "both"
         "alert_position": "bottom",
         "alert_text": "!",
         "alert_scale": 1.0,
@@ -117,7 +121,7 @@ DEFAULTS: Dict[str, Any] = {
         "timer_phase": "whole_card",
         "answer_seconds": 8.0,
         # When the out-of-time warning is allowed to appear.
-        "alert_phase": "always",  # "always", "question" or "answer"
+        "alert_phase": "answer",  # "always", "question" or "answer"
         "pulse_when_over": True,
         "sound": False,
     },

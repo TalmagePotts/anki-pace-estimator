@@ -155,8 +155,15 @@ detailed window at **Tools ▸ Pace Estimator…**.
 
 ## Per-card time goal
 
+Off by default. Switched on, it ships as the least intrusive thing that still
+helps: no timer on screen at all, the clock running quietly across the whole
+card, and a large symbol at the bottom only if you are over time *and* have
+already turned the card over. Warning on the question side would double as a
+hint that you are struggling to recall the answer, which is the opposite of
+what a review is for.
+
 Set a target seconds-per-card, globally or per deck on the Decks tab. The timer
-and the out-of-time warning are independent, so you can have:
+and the out-of-time warning are independent, so you can also have:
 
 - a running timer that turns red when you go over,
 - a large symbol over the lower half of the card and no timer at all, so nothing
