@@ -1,0 +1,13 @@
+name: Idea or feedback
+description: A suggestion, a question, or something that felt awkward
+labels: [feedback]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like
+      description: >
+        Rough thoughts are welcome. If it is about accuracy, saying how your
+        study habits differ from the assumptions in the README helps a lot.
+    validations:
+      required: true

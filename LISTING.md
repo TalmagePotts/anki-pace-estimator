@@ -65,8 +65,6 @@ a summary of the session you just finished.</p>
 as a heads-up display while reviewing, and in a detailed analysis window under
 Tools. Every block can be turned off and reordered.</p>
 
-<img src="https://raw.githubusercontent.com/TalmagePotts/anki-pace-estimator/main/docs/images/session.png">
-
 <h3>Per-card time goal</h3>
 
 <p>Off unless you want it. Switched on, it stays out of the way: no timer on
@@ -94,7 +92,23 @@ about 40% and which nothing about a card can predict — so it is shown as a
 range rather than pretended away. The full method, including the ideas that
 were tested and rejected, is in the README.</p>
 
-<p>Requires Anki 23.10 or later. Source, methodology and issue tracker:
+<h3>Feedback</h3>
+
+<p>Bug reports, ideas and questions are all welcome — please use GitHub rather
+than the AnkiWeb comments, since I can actually reply there:</p>
+
+<ul>
+<li><a href="https://github.com/TalmagePotts/anki-pace-estimator/issues/new?template=bug.yml">Report a problem</a> — the form asks for the add-on's debug log, which usually settles it in one round.</li>
+<li><a href="https://github.com/TalmagePotts/anki-pace-estimator/issues/new?template=idea.yml">Suggest something</a></li>
+<li><a href="https://github.com/TalmagePotts/anki-pace-estimator/discussions">Discussions</a> for anything else.</li>
+</ul>
+
+<p>If a figure looks wrong, check first whether it is scoped to the decks you
+have selected rather than your whole collection — that accounts for most
+surprises.</p>
+
+<p>Requires Anki 23.10 or later. Source and full methodology, including the
+ideas that were tested and rejected:
 <a href="https://github.com/TalmagePotts/anki-pace-estimator">github.com/TalmagePotts/anki-pace-estimator</a></p>
 ```
 

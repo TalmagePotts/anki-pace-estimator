@@ -184,6 +184,17 @@ editing a single card template. **Preview it here** on the settings tab runs the
 whole thing on the current screen with a shortened goal, so you can check a
 setting without sitting through a real card.
 
+## Feedback
+
+Bugs, ideas and questions are all welcome:
+
+- **[Report a problem](https://github.com/TalmagePotts/anki-pace-estimator/issues/new?template=bug.yml)** — the form asks for the debug log, which usually settles it in one round.
+- **[Suggest something](https://github.com/TalmagePotts/anki-pace-estimator/issues/new?template=idea.yml)**
+- **[Discussions](https://github.com/TalmagePotts/anki-pace-estimator/discussions)** — anything that is not a bug report.
+
+If a figure looks wrong, check first whether it is scoped to the decks you have
+selected rather than your whole collection; that accounts for most surprises.
+
 ## Installing
 
 **From AnkiWeb** — Tools ▸ Add-ons ▸ Get Add-ons, and paste the code from the

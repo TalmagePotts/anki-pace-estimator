@@ -1,0 +1,40 @@
+name: Something is wrong
+description: A number looks off, something does not appear, or Anki showed an error
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: anki
+    attributes:
+      label: Anki version
+      description: Help > About in Anki. For example 26.8.1.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: macOS 15, Windows 11, Linux
+  - type: textarea
+    id: log
+    attributes:
+      label: Recent activity log
+      description: >
+        Optional but the fastest way to a fix. In Anki: Tools > Pace Estimator >
+        Settings > Toolbar tab > Troubleshooting > Show recent activity, then
+        press "Show Details" and paste what is there.
+      render: text
+  - type: textarea
+    id: numbers
+    attributes:
+      label: If a number looks wrong
+      description: >
+        What the panel said, and what you believe it should have said. Estimates
+        are scoped to the decks you have selected, so a figure that disagrees
+        with Anki's own totals is often that rather than a bug.
