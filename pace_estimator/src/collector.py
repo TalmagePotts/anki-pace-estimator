@@ -15,6 +15,11 @@ from . import stats as S
 
 DAY = 86400
 
+#: The longest period the home screen reports on. Reviews are always fetched
+#: for at least this long, so a short speed window cannot silently truncate the
+#: "new cards learned this month" figure into agreeing with the weekly one.
+TOTALS_DAYS = 31
+
 
 @dataclass
 class DeckLine:
@@ -307,7 +312,9 @@ _REVIEW_SQL = """
 """
 
 
-def fetch_reviews(col, cfg, expanded: Set[int]) -> Tuple[List[S.Review], Dict[int, int], int]:
+def fetch_reviews(
+    col, cfg, expanded: Set[int]
+) -> Tuple[List[S.Review], Dict[int, int], int, int]:
     """Load the review window.
 
     Rows are fetched for *every* deck and filtered afterwards: the wall-clock
@@ -319,10 +326,14 @@ def fetch_reviews(col, cfg, expanded: Set[int]) -> Tuple[List[S.Review], Dict[in
     started -- the window is widened rather than an estimate being built from
     noise.
     """
-    days = int(cfg["speed"]["lookback_days"])
+    lookback = int(cfg["speed"]["lookback_days"])
+    # Speeds only need the lookback window, but the totals need a full month,
+    # so the wider of the two is fetched and the speed sample sliced back out.
+    days = max(lookback, TOTALS_DAYS)
     limit = int(cfg["speed"]["max_rows"])
     min_sample = int(cfg["speed"].get("min_sample", 0))
     cutoff_ms = int((col.sched.day_cutoff - days * DAY) * 1000)
+    speed_cutoff_ms = int((col.sched.day_cutoff - lookback * DAY) * 1000)
 
     rows = col.db.all(_REVIEW_SQL, cutoff_ms, limit)
     if min_sample and _scoped_count(rows, expanded) < min_sample:
@@ -341,7 +352,7 @@ def fetch_reviews(col, cfg, expanded: Set[int]) -> Tuple[List[S.Review], Dict[in
         effective_cutoff,
     )
     first_seen = {int(cid): int(first) for cid, first in first_rows}
-    return reviews, first_seen, effective_cutoff
+    return reviews, first_seen, effective_cutoff, speed_cutoff_ms
 
 
 def _scoped_count(rows, expanded: Set[int]) -> int:
@@ -396,24 +407,35 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
         generated_at=time.time(),
     )
 
-    reviews, first_seen, effective_cutoff = fetch_reviews(col, scoped_cfg, expanded)
+    reviews, first_seen, effective_cutoff, speed_cutoff_ms = fetch_reviews(
+        col, scoped_cfg, expanded
+    )
     reached_days = max(
         1,
         int(round((col.sched.day_cutoff - effective_cutoff / 1000.0) / DAY)),
     )
-    snap.lookback_days = reached_days
     timed_all = S.annotate(
         reviews,
         idle_cutoff_s=float(cfg["speed"]["idle_cutoff_s"]),
         max_answer_s=float(cfg["speed"]["max_answer_s"]),
     )
     timed = [t for t in timed_all if not expanded or t.review.did in expanded]
-    snap.sample_size = len(timed)
+
+    # Speeds come from the lookback window; the period totals below use the
+    # whole fetch. If the lookback holds too little, it widens to everything
+    # rather than measuring a pace from a handful of cards.
+    speed_timed = [t for t in timed if t.review.id >= speed_cutoff_ms]
+    if len(speed_timed) < int(cfg["speed"].get("min_sample", 0)):
+        speed_timed = timed
+        snap.lookback_days = reached_days
+    else:
+        snap.lookback_days = min(int(cfg["speed"]["lookback_days"]), reached_days)
+    snap.sample_size = len(speed_timed)
 
     features = tuple(cfg["speed"]["features"])
     snap.ancestors = deck_ancestors(col) if cfg["speed"]["per_deck_speeds"] else {}
     snap.speeds = S.compute_speeds(
-        timed,
+        speed_timed,
         cfg["speed"]["estimator"],
         features,
         hour_shrinkage=(
@@ -430,7 +452,7 @@ def build_snapshot(col, cfg, override_decks: Optional[Sequence[int]] = None) -> 
         snap.speeds.per_class = {}
 
     fresh_ids = {cid for cid in first_seen}
-    snap.behaviour = S.measure_behaviour(timed, new_card_ids=fresh_ids)
+    snap.behaviour = S.measure_behaviour(speed_timed, new_card_ids=fresh_ids)
 
     snap.workload, snap.per_deck = gather_workload(col, scoped_cfg, selected)
     snap.workload.review_buckets = review_buckets(col, expanded, snap.workload, features)

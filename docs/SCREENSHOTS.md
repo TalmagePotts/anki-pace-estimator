@@ -4,7 +4,11 @@ AnkiWeb strips every `<img>` attribute except `src`, so a picture is shown at
 its natural pixel size. **Resize before uploading** — anything wider than about
 900px will overflow the page.
 
-## Taking them (macOS)
+Use `./docs/grab.sh <name>` — it captures straight into `docs/images/` under the
+right filename and scales the result down. Drag a box around just the panel:
+these pages are public, and a full deck-list shot puts every deck name on them.
+
+## Taking them by hand (macOS)
 
 - **⌘⇧4** then drag — saves a region shot to the Desktop.
 - **⌘⇧4** then **space**, then click a window — captures that window with its

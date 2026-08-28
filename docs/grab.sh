@@ -29,9 +29,12 @@ fi
 out="images/$name.png"
 mkdir -p images
 echo "Capturing: ${HINTS[$index]}"
-echo "Click the Anki window when the cursor becomes a camera (Escape cancels)."
-# -i interactive, -W start in window mode, -o drop the window shadow.
-screencapture -i -W -o "$out"
+echo "Drag a box around just the part you want."
+echo "  space  = switch to whole-window mode instead"
+echo "  escape = cancel"
+# Region mode by default: a whole-window shot of the deck list would put every
+# deck name on a public listing page.
+screencapture -i -o "$out"
 
 if [ ! -f "$out" ]; then
   echo "cancelled - nothing saved."
