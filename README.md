@@ -3,6 +3,11 @@
 An Anki add-on that measures how fast you actually answer cards and turns that
 into an honest estimate of how long today's workload will take.
 
+![The panel on the deck list](docs/images/home.png)
+
+An Anki add-on that measures how fast you actually answer cards and turns that
+into an honest estimate of how long today's workload will take.
+
 ## Why the estimate differs from other add-ons
 
 Most speed add-ons multiply "cards due" by one average seconds-per-card. Three

@@ -2,7 +2,7 @@
   "package": "pace_estimator",
   "name": "Pace Estimator",
   "human_version": "1.0.0",
-  "homepage": "",
+  "homepage": "https://github.com/TalmagePotts/anki-pace-estimator",
   "conflicts": [],
   "min_point_version": 231000
 }
