@@ -101,7 +101,7 @@
     "alert_scale": 1.0,
     "timer_phase": "whole_card",
     "answer_seconds": 8.0,
-    "alert_phase": "answer",
+    "alert_phase": "question",
     "pulse_when_over": true,
     "sound": false
   },

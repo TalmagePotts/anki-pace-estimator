@@ -102,9 +102,9 @@ DEFAULTS: Dict[str, Any] = {
         # The running timer and the out-of-time warning are independent: you
         # can have a timer with no warning, a warning with no timer, or both.
         # The shipped combination is the least intrusive one that still helps:
-        # nothing on screen at all until you are out of time, and then only
-        # once you have turned the card over, so the warning never becomes a
-        # hint that you are taking too long to recall something.
+        # nothing on screen at all until the card runs over its time, and then
+        # a symbol while the question is still up -- the moment at which the
+        # useful response is to stop struggling and turn the card over.
         "show_timer": False,
         "count_down": True,
         "badge_position": "top-right",
@@ -121,7 +121,7 @@ DEFAULTS: Dict[str, Any] = {
         "timer_phase": "whole_card",
         "answer_seconds": 8.0,
         # When the out-of-time warning is allowed to appear.
-        "alert_phase": "answer",  # "always", "question" or "answer"
+        "alert_phase": "question",  # "always", "question" or "answer"
         "pulse_when_over": True,
         "sound": False,
     },

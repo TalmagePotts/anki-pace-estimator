@@ -99,10 +99,17 @@ def _on_overview(overview, content) -> None:
         content.table += html
 
 
+#: Prefix for the messages our own HTML sends back through ``pycmd``. Derived
+#: from a constant rather than sliced by a hardcoded length, which is how the
+#: buttons silently stopped working when the prefix changed length.
+CMD_PREFIX = "pace:"
+
+
 def _on_js_message(handled, message: str, context):
-    if not isinstance(message, str) or not message.startswith("pace:"):
+    if not isinstance(message, str) or not message.startswith(CMD_PREFIX):
         return handled
-    cmd = message[4:]
+    cmd = message[len(CMD_PREFIX):]
+    L.log("command: %s", cmd)
     if cmd == "config":
         from .ui.config_dialog import open_config
 
@@ -111,6 +118,9 @@ def _on_js_message(handled, message: str, context):
         from .ui.statswin import open_stats
 
         open_stats()
+    else:
+        L.log("command not recognised: %r", message)
+        return handled
     return (True, None)
 
 

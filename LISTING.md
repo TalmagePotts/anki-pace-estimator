@@ -50,9 +50,9 @@ block can be turned off and reordered.
 **Per-card time goal**
 
 Off unless you want it. Switched on, it stays out of the way: no timer on
-screen, and a large symbol at the bottom only if a card ran over time and you
-have already turned it over — so it never becomes a hint that you are
-struggling to recall the answer.
+screen, and a large symbol at the bottom once a card has run over its time, so
+you know to stop struggling and turn it over. It can sit on the answer side
+instead if you would rather not be nudged mid-recall.
 
 Set a target seconds-per-card, globally or per deck. If you would rather watch
 the clock, a countdown timer can be switched on, in any corner, counting up or

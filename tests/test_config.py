@@ -192,15 +192,16 @@ def test_a_newly_added_component_arrives_switched_on():
 def test_shipped_goal_defaults_are_quiet():
     """Off by default, and unobtrusive the moment it is switched on.
 
-    Someone enabling this wants to know when a card ran long, not a clock
-    ticking at them -- and a warning on the question side would double as a
-    hint that they are struggling to recall the answer.
+    Someone enabling this wants to know when a card has run long, not a clock
+    ticking at them. The warning lands while the question is still showing,
+    because that is when it can still change what you do: stop struggling and
+    turn the card over.
     """
     goal = C.normalise({})["goal"]
     assert goal["enabled"] is False
     assert goal["show_timer"] is False
     assert goal["alert_style"] == "exclamation"
-    assert goal["alert_phase"] == "answer"
+    assert goal["alert_phase"] == "question"
     assert goal["alert_position"] == "bottom"
     assert goal["timer_phase"] == "whole_card"   # times the card, not just the answer
 

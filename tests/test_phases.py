@@ -105,9 +105,9 @@ def test_filtered_cards_use_their_home_deck_s_time():
     assert decide(overrides, QUESTION, FakeCard(did=999, odid=7))[0] == 30.0
 
 
-def test_shipped_defaults_run_the_clock_but_warn_only_on_the_answer():
+def test_shipped_defaults_warn_while_the_question_is_still_up():
     runtime = runtime_with({})          # goal switched on, everything else default
     q = runtime._goal_for_phase(FakeCard(), QUESTION)
     a = runtime._goal_for_phase(FakeCard(), ANSWER)
-    assert q == (12.0, True, False)     # clock starts, nothing may show yet
-    assert a == (12.0, False, True)     # same clock continues, warning allowed
+    assert q == (12.0, True, True)      # clock starts and the warning may fire
+    assert a == (12.0, False, False)    # clock continues, but nothing is shown
