@@ -173,9 +173,9 @@ def render(snap: Snapshot, cfg, show_buttons: bool = True) -> str:
     if show_buttons:
         footer_right = (
             '<a class="{p}-btn" href="#" title="Detailed stats" '
-            "onclick=\"pycmd('rvp:stats');return false;\">📊</a> "
-            '<a class="{p}-btn" href="#" title="Review Pace settings" '
-            "onclick=\"pycmd('rvp:config');return false;\">⚙</a>"
+            "onclick=\"pycmd('pace:stats');return false;\">📊</a> "
+            '<a class="{p}-btn" href="#" title="Pace Estimator settings" '
+            "onclick=\"pycmd('pace:config');return false;\">⚙</a>"
         ).format(p=T.PREFIX)
 
     return T.panel(

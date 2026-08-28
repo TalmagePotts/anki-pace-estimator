@@ -1,4 +1,4 @@
-"""Pure statistics core for Review Pace.
+"""Pure statistics core for Pace Estimator.
 
 This module deliberately imports nothing from ``anki`` or ``aqt`` so that every
 number the add-on displays can be unit-tested without launching Anki.  The

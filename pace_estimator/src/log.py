@@ -32,7 +32,7 @@ def _default_path() -> Optional[str]:
 
         base = mw.pm.addonFolder() if mw and mw.pm else None
         if base:
-            return os.path.join(base, "review_pace_debug.log")
+            return os.path.join(base, "pace_estimator_debug.log")
     except Exception:
         pass
     return None
@@ -59,7 +59,7 @@ def log(message: str, *args: Any) -> None:
         del _lines[: len(_lines) - MAX_MEMORY_LINES]
     if not _enabled:
         return
-    print("[Review Pace] " + line)
+    print("[Pace Estimator] " + line)
     if _path:
         try:
             with open(_path, "a", encoding="utf-8") as fh:

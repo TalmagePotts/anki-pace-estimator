@@ -4,7 +4,7 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review_pace"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pace_estimator"))
 
 from src import collector as CO  # noqa: E402
 from src import config as C  # noqa: E402
@@ -94,9 +94,9 @@ def test_speed_mode_switches_the_headline_number():
     # The unit is its own span, so a long value never has to be truncated to
     # make room for it.
     assert "Wall-clock speed" in wall
-    assert ">6.6<span class=\"rvp-unit\">s/card</span>" in wall
+    assert ">6.6<span class=\"pace-unit\">s/card</span>" in wall
     assert "Answer speed" in answer
-    assert ">5.0<span class=\"rvp-unit\">s/card</span>" in answer
+    assert ">5.0<span class=\"pace-unit\">s/card</span>" in answer
 
 
 def test_finish_time_and_range_can_be_turned_off():
@@ -169,7 +169,7 @@ def test_warning_only_mode_has_no_timer():
     assert payload["goal"]["show_timer"] is False
     assert payload["goal"]["alert_style"] == "exclamation"
     js = RV.script(payload)
-    assert "rvp-alert" in js
+    assert "pace-alert" in js
 
 
 def test_alert_position_reaches_the_script():
@@ -212,12 +212,12 @@ def test_column_count_is_chosen_to_fill_the_last_row():
 def test_layout_adapts_to_the_tiles_actually_shown():
     snap = make_snapshot()
     seven = home.render(snap, C.normalise({}))
-    assert seven.count('class="rvp-tile') == 7
+    assert seven.count('class="pace-tile') == 7
     assert "repeat(4, minmax(0, 1fr))" in seven
 
     snap.workload = S.Workload(new_cards=20, review_cards=180, learning_reps=0)
     six = home.render(snap, C.normalise({}))
-    assert six.count('class="rvp-tile') == 6
+    assert six.count('class="pace-tile') == 6
     assert "repeat(3, minmax(0, 1fr))" in six
 
 
@@ -228,7 +228,7 @@ def test_explicit_column_setting_wins():
 
 def test_labels_and_values_never_wrap():
     css = home.T.panel_css(C.normalise({}))
-    for block in ("rvp-label", "rvp-value", "rvp-sub"):
+    for block in ("pace-label", "pace-value", "pace-sub"):
         section = css.split("." + block + " {")[1].split("}")[0]
         assert "white-space: nowrap" in section, block
         assert "text-overflow: ellipsis" in section, block
@@ -237,8 +237,8 @@ def test_labels_and_values_never_wrap():
 def test_label_comes_before_the_value():
     # Every tile lines up only if the label is the first row of each one.
     html = home.render(make_snapshot(), C.normalise({}))
-    tile = html.split('class="rvp-tile')[1]
-    assert tile.index("rvp-label") < tile.index("rvp-value")
+    tile = html.split('class="pace-tile')[1]
+    assert tile.index("pace-label") < tile.index("pace-value")
 
 
 def test_speed_tile_reports_the_mean_matching_answered_today():

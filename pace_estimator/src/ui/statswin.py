@@ -1,4 +1,4 @@
-"""Tools ▸ Review Pace — the detailed view."""
+"""Tools ▸ Pace Estimator — the detailed view."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _table(headers: List[str], rows: List[List[str]], aligns: str = "") -> str:
             for i, cell in enumerate(row)
         )
         body += "<tr>%s</tr>" % cells
-    return '<table class="rvp-tbl"><thead><tr>%s</tr></thead><tbody>%s</tbody></table>' % (
+    return '<table class="pace-tbl"><thead><tr>%s</tr></thead><tbody>%s</tbody></table>' % (
         head,
         body,
     )
@@ -43,23 +43,23 @@ def _extra_css() -> str:
     return """
 <style>
 body {{ padding: 0 18px 24px 18px; }}
-.rvp-sec {{ max-width: 720px; margin: 22px auto 0 auto; }}
-.rvp-sec h2 {{
+.pace-sec {{ max-width: 720px; margin: 22px auto 0 auto; }}
+.pace-sec h2 {{
   font-size: .78em; letter-spacing: .07em; text-transform: uppercase;
   color: {subtle}; margin: 0 0 8px 0; font-weight: 600;
 }}
-.rvp-tbl {{
+.pace-tbl {{
   width: 100%; border-collapse: collapse; font-size: .88em;
   font-variant-numeric: tabular-nums;
 }}
-.rvp-tbl th {{
+.pace-tbl th {{
   font-weight: 600; font-size: .82em; color: {faint};
   padding: 4px 8px; border-bottom: 1px solid {border};
   text-transform: uppercase; letter-spacing: .04em;
 }}
-.rvp-tbl td {{ padding: 5px 8px; border-bottom: 1px solid {border}; }}
-.rvp-tbl tr:last-child td {{ border-bottom: none; }}
-.rvp-note {{ font-size: .8em; color: {faint}; margin-top: 8px; line-height: 1.5; }}
+.pace-tbl td {{ padding: 5px 8px; border-bottom: 1px solid {border}; }}
+.pace-tbl tr:last-child td {{ border-bottom: none; }}
+.pace-note {{ font-size: .8em; color: {faint}; margin-top: 8px; line-height: 1.5; }}
 </style>
 """.format(
         subtle=T.FG_SUBTLE, faint=T.FG_FAINT, border=T.BORDER
@@ -85,8 +85,8 @@ def render_report(snap: Snapshot, cfg) -> str:
                 ]
             )
         parts.append(
-            '<div class="rvp-sec"><h2>By deck</h2>%s'
-            '<div class="rvp-note">Each deck is priced from its own review history, '
+            '<div class="pace-sec"><h2>By deck</h2>%s'
+            '<div class="pace-note">Each deck is priced from its own review history, '
             "falling back to the deck above it when it has too little of one. Decks "
             "differ far more than card types do, so a single collection-wide rate "
             "would misprice most of them.</div></div>"
@@ -128,8 +128,8 @@ def render_report(snap: Snapshot, cfg) -> str:
             ]
         )
         parts.append(
-            '<div class="rvp-sec"><h2>Speed by card type — last %d days</h2>%s'
-            '<div class="rvp-note">“Answer” is the time from seeing the question to '
+            '<div class="pace-sec"><h2>Speed by card type — last %d days</h2>%s'
+            '<div class="pace-note">“Answer” is the time from seeing the question to '
             "pressing a button. “Wall” adds the gap before the next card appears — "
             "rendering, hesitation, and the moment between cards. “Slow” is the "
             "80th percentile of a single answer — the ETA range is built from the "
@@ -165,8 +165,8 @@ def render_report(snap: Snapshot, cfg) -> str:
             ]
         )
         parts.append(
-            '<div class="rvp-sec"><h2>How the estimate is built</h2>%s'
-            '<div class="rvp-note">Measured from your own history: %.2f answers per '
+            '<div class="pace-sec"><h2>How the estimate is built</h2>%s'
+            '<div class="pace-note">Measured from your own history: %.2f answers per '
             "new card, %.0f%% of reviews graded Again, %.2f answers per lapse. "
             "That is why this differs from “cards × seconds”.</div></div>"
             % (
@@ -189,7 +189,7 @@ def render_report(snap: Snapshot, cfg) -> str:
         rows[1][0] = "This week"
         rows[2][0] = "This month"
     parts.append(
-        '<div class="rvp-sec"><h2>Work done</h2>%s</div>'
+        '<div class="pace-sec"><h2>Work done</h2>%s</div>'
         % _table(["Period", "Answers", "Time", "New learned"], rows, "lrrr")
     )
     return "".join(parts)
@@ -221,8 +221,8 @@ def _feature_table(snap: Snapshot, cfg) -> str:
         return ""
     names = ", ".join(FEATURE_LABELS[f].lower() for f in speeds.features)
     return (
-        '<div class="rvp-sec"><h2>Split by %s</h2>%s'
-        '<div class="rvp-note">A split is only used once it has %d samples of its '
+        '<div class="pace-sec"><h2>Split by %s</h2>%s'
+        '<div class="pace-note">A split is only used once it has %d samples of its '
         "own; below that it falls back to the card type, so a rarely-seen "
         "combination cannot swing the estimate.</div></div>"
         % (names, _table(["Bucket", "Samples", "Speed", "Used"], rows, "lrrl"), MIN_SAMPLES)
@@ -279,8 +279,8 @@ def _hour_table(snap: Snapshot, cfg) -> str:
             "of these are being applied."
         )
     return (
-        '<div class="rvp-sec"><h2>By time of day</h2>%s'
-        '<div class="rvp-note">%s</div></div>'
+        '<div class="pace-sec"><h2>By time of day</h2>%s'
+        '<div class="pace-note">%s</div></div>'
         % (_table(["Hour", "Answers", "Days", "Speed", "Applied"], rows, "lrrrr"), note)
     )
 
@@ -292,7 +292,7 @@ class StatsWindow(QDialog):
         self.setMinimumSize(700, 560)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        self.web = AnkiWebView(title="review_pace_stats")
+        self.web = AnkiWebView(title="pace_estimator_stats")
         self.web.set_bridge_command(self._on_cmd, self)
         lay.addWidget(self.web, 1)
 
@@ -312,11 +312,11 @@ class StatsWindow(QDialog):
         lay.addLayout(bar)
 
         QShortcut(QKeySequence("Ctrl+R"), self, activated=self.refresh)
-        restoreGeom(self, "rvp_stats")
+        restoreGeom(self, "pace_stats")
         self.refresh()
 
     def _on_cmd(self, cmd: str):
-        if cmd == "rvp:config":
+        if cmd == "pace:config":
             self._open_config()
         return None
 
@@ -333,7 +333,7 @@ class StatsWindow(QDialog):
         self.web.stdHtml(render_report(snap, cfg), context=self)
 
     def reject(self) -> None:
-        saveGeom(self, "rvp_stats")
+        saveGeom(self, "pace_stats")
         self.web.cleanup()
         super().reject()
 

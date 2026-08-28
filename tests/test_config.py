@@ -1,7 +1,7 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review_pace"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pace_estimator"))
 
 from src import config as C  # noqa: E402
 from src import consts as K  # noqa: E402

@@ -6,8 +6,8 @@
 set -euo pipefail
 
 cd "$(dirname "$0")"
-SRC=review_pace
-OUT=dist/review_pace.ankiaddon
+SRC=pace_estimator
+OUT=dist/pace_estimator.ankiaddon
 
 # A placeholder LICENSE is worse than none, so the content is checked, not
 # just the file's existence.

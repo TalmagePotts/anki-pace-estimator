@@ -24,7 +24,7 @@ def runtime_with(goal_overrides):
     test_imports._install_stubs()
     import importlib
 
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review_pace"))
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pace_estimator"))
     runtime = importlib.import_module("src.runtime")
     config = importlib.import_module("src.config")
     cfg = config.normalise({"goal": dict({"enabled": True}, **goal_overrides)})

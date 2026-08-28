@@ -15,12 +15,12 @@ from ..collector import Snapshot
 from ..session import LiveSession, remaining_estimate
 
 _STYLE = """
-#rvp-hud, #rvp-goal, #rvp-alert {
+#pace-hud, #pace-goal, #pace-alert {
   position: fixed; z-index: 2147483000; pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-variant-numeric: tabular-nums; user-select: none;
 }
-#rvp-hud {
+#pace-hud {
   display: flex; flex-direction: column; gap: 3px;
   padding: 8px 11px; border-radius: 9px; line-height: 1.25;
   background: var(--canvas-elevated, rgba(128,128,128,.16));
@@ -30,18 +30,18 @@ _STYLE = """
   backdrop-filter: blur(6px);
   min-width: 108px;
 }
-#rvp-hud .rvp-row { display: flex; justify-content: space-between; gap: 10px; }
-#rvp-hud .rvp-k { opacity: .62; font-size: .78em; }
-#rvp-hud .rvp-v { font-weight: 600; }
-#rvp-hud .rvp-bar {
+#pace-hud .pace-row { display: flex; justify-content: space-between; gap: 10px; }
+#pace-hud .pace-k { opacity: .62; font-size: .78em; }
+#pace-hud .pace-v { font-weight: 600; }
+#pace-hud .pace-bar {
   height: 3px; border-radius: 2px; margin-top: 4px; overflow: hidden;
   background: var(--canvas-inset, rgba(128,128,128,.25));
 }
-#rvp-hud .rvp-bar > i {
+#pace-hud .pace-bar > i {
   display: block; height: 100%; border-radius: 2px;
   background: var(--accent-card, #3a7bd5); transition: width .25s ease;
 }
-#rvp-goal {
+#pace-goal {
   display: flex; align-items: center; justify-content: center;
   min-width: 2.6em; padding: 4px 9px; border-radius: 999px;
   font-weight: 700; letter-spacing: .02em;
@@ -50,21 +50,21 @@ _STYLE = """
   color: var(--fg, inherit);
   transition: background-color .2s ease, color .2s ease, border-color .2s ease;
 }
-#rvp-goal.rvp-over {
+#pace-goal.pace-over {
   color: #fff; background: #d9484d; border-color: #d9484d;
-  animation: rvp-pulse 1s ease-in-out infinite;
+  animation: pace-pulse 1s ease-in-out infinite;
 }
-#rvp-goal.rvp-nopulse { animation: none; }
-#rvp-alert {
+#pace-goal.pace-nopulse { animation: none; }
+#pace-alert {
   left: 0; right: 0; display: none;
   align-items: center; justify-content: center;
   color: #d9484d; font-weight: 800; line-height: 1;
   text-shadow: 0 2px 14px rgba(0,0,0,.28);
   opacity: 0; transition: opacity .18s ease;
 }
-#rvp-alert.rvp-show { display: flex; opacity: .92; }
-#rvp-alert.rvp-pulsing { animation: rvp-pulse 1s ease-in-out infinite; }
-@keyframes rvp-pulse {
+#pace-alert.pace-show { display: flex; opacity: .92; }
+#pace-alert.pace-pulsing { animation: pace-pulse 1s ease-in-out infinite; }
+@keyframes pace-pulse {
   0%, 100% { transform: scale(1); opacity: 1; }
   50%      { transform: scale(1.09); opacity: .82; }
 }
@@ -89,16 +89,16 @@ _JS = r"""
     }
     return el;
   }
-  if (!document.getElementById("rvp-style")) {
+  if (!document.getElementById("pace-style")) {
     var st = document.createElement("style");
-    st.id = "rvp-style";
+    st.id = "pace-style";
     st.textContent = %(style)s;
     document.head.appendChild(st);
   }
 
-  var hud = document.getElementById("rvp-hud");
+  var hud = document.getElementById("pace-hud");
   if (S.hud) {
-    hud = ensure("rvp-hud");
+    hud = ensure("pace-hud");
     hud.innerHTML = S.hud.html;
     hud.style.opacity = S.hud.opacity;
     hud.style.fontSize = S.hud.scale + "em";
@@ -108,9 +108,9 @@ _JS = r"""
     hud.style.display = "none";
   }
 
-  if (window.__rvpTimer) { clearInterval(window.__rvpTimer); window.__rvpTimer = null; }
-  var badge = document.getElementById("rvp-goal");
-  var alert = document.getElementById("rvp-alert");
+  if (window.__paceTimer) { clearInterval(window.__paceTimer); window.__paceTimer = null; }
+  var badge = document.getElementById("pace-goal");
+  var alert = document.getElementById("pace-alert");
   if (!S.goal) {
     if (badge) badge.style.display = "none";
     if (alert) alert.className = "";
@@ -119,7 +119,7 @@ _JS = r"""
   var G = S.goal;
 
   if (G.show_timer) {
-    badge = ensure("rvp-goal");
+    badge = ensure("pace-goal");
     badge.style.display = "";
     badge.style.fontSize = G.scale + "em";
     place(badge, G.position, 14);
@@ -133,7 +133,7 @@ _JS = r"""
   var wantAlert = allowAlert &&
     (G.alert_style === "exclamation" || G.alert_style === "both");
   if (wantAlert) {
-    alert = ensure("rvp-alert");
+    alert = ensure("pace-alert");
     alert.textContent = G.alert_text;
     alert.className = "";
     alert.style.fontSize = (22 * G.alert_scale) + "vh";
@@ -158,8 +158,8 @@ _JS = r"""
   // stamp is injected before any database work, so a slow snapshot rebuild
   // cannot eat into the card's time. Re-injecting mid-card (toggling the HUD,
   // for instance) reuses the same stamp instead of restarting the timer.
-  var start = (typeof window.__rvpCardStart === "number" && window.__rvpCardStart)
-    ? window.__rvpCardStart : Date.now();
+  var start = (typeof window.__paceCardStart === "number" && window.__paceCardStart)
+    ? window.__paceCardStart : Date.now();
   var target = G.seconds * 1000;
   var fired = false;
   function beep() {
@@ -196,15 +196,15 @@ _JS = r"""
         : fmt(elapsed, true);
       var recolour = over && allowAlert &&
         (G.alert_style === "badge" || G.alert_style === "both");
-      badge.className = recolour ? (G.pulse ? "rvp-over" : "rvp-over rvp-nopulse") : "";
+      badge.className = recolour ? (G.pulse ? "pace-over" : "pace-over pace-nopulse") : "";
     }
     if (wantAlert && alert) {
-      alert.className = over ? (G.pulse ? "rvp-show rvp-pulsing" : "rvp-show") : "";
+      alert.className = over ? (G.pulse ? "pace-show pace-pulsing" : "pace-show") : "";
     }
     if (over && allowAlert && !fired) { fired = true; if (G.sound) beep(); }
   }
   tick();
-  window.__rvpTimer = setInterval(tick, 100);
+  window.__paceTimer = setInterval(tick, 100);
 })();
 """
 
@@ -214,7 +214,7 @@ MIN_ANSWERS_FOR_COMPARISON = 5
 
 
 def _row(key: str, value: str) -> str:
-    return '<div class="rvp-row"><span class="rvp-k">%s</span>' '<span class="rvp-v">%s</span></div>' % (
+    return '<div class="pace-row"><span class="pace-k">%s</span>' '<span class="pace-v">%s</span></div>' % (
         key,
         value,
     )
@@ -252,7 +252,7 @@ def build_hud_html(snap: Snapshot, cfg, session: LiveSession) -> str:
         done = session.answers
         total = done + max(0, int(est.total_reps))
         pct = (done / total * 100.0) if total else 0.0
-        rows.append('<div class="rvp-bar"><i style="width:%.1f%%"></i></div>' % pct)
+        rows.append('<div class="pace-bar"><i style="width:%.1f%%"></i></div>' % pct)
 
     return "".join(rows)
 
@@ -296,7 +296,7 @@ def script(payload: Dict[str, Any]) -> str:
 
 
 def clear_script() -> str:
-    return script({"hud": None, "goal": None}) + "\nwindow.__rvpCardStart = null;"
+    return script({"hud": None, "goal": None}) + "\nwindow.__paceCardStart = null;"
 
 
 def stamp_script() -> str:
@@ -305,4 +305,4 @@ def stamp_script() -> str:
     Injected before the add-on does any database work, so the per-card timer
     measures the card rather than the add-on.
     """
-    return "window.__rvpCardStart = Date.now();"
+    return "window.__paceCardStart = Date.now();"

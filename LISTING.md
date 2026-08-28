@@ -2,7 +2,7 @@ Text to paste into the AnkiWeb upload form.
 
 ## Title
 
-Review Pace — accurate study time estimates
+Pace Estimator — accurate study time estimates
 
 ## Description
 
@@ -12,7 +12,7 @@ estimate of how long today's workload will take.
 **Why the estimate differs from other add-ons**
 
 Most speed add-ons multiply "cards due" by one average seconds-per-card. Four
-things make that wrong, and Review Pace fixes all four:
+things make that wrong, and Pace Estimator fixes all four:
 
 - **Decks are not interchangeable.** On the collection this was built against,
   decks ranged from 8 to 29 seconds a card. A single collection-wide rate gave

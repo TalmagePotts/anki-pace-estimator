@@ -8,7 +8,7 @@ import os
 import sys
 import types
 
-ROOT = os.path.join(os.path.dirname(__file__), "..", "review_pace")
+ROOT = os.path.join(os.path.dirname(__file__), "..", "pace_estimator")
 sys.path.insert(0, ROOT)
 
 

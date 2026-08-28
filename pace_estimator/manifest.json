@@ -1,6 +1,6 @@
 {
-  "package": "review_pace",
-  "name": "Review Pace",
+  "package": "pace_estimator",
+  "name": "Pace Estimator",
   "human_version": "1.0.0",
   "homepage": "",
   "conflicts": [],

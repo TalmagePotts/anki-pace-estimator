@@ -1,4 +1,4 @@
-# Review Pace
+# Pace Estimator
 
 An Anki add-on that measures how fast you actually answer cards and turns that
 into an honest estimate of how long today's workload will take.
@@ -6,10 +6,10 @@ into an honest estimate of how long today's workload will take.
 ## Why the estimate differs from other add-ons
 
 Most speed add-ons multiply "cards due" by one average seconds-per-card. Three
-things make that wrong, and Review Pace fixes all three:
+things make that wrong, and Pace Estimator fixes all three:
 
 1. **A new card is not one answer.** With learning steps it is two, three or
-   more. Review Pace measures your real answers-per-new-card from your review
+   more. Pace Estimator measures your real answers-per-new-card from your review
    history rather than assuming.
 2. **Card types differ enormously.** A mature review might take 5 seconds and a
    brand-new card 20. Speeds are measured separately for learning, young,
@@ -122,7 +122,7 @@ supports it. Backtested:
 | **Applied, five-day requirement** | **+0.8%** | **26.2%** |
 
 Without the guard it makes estimates *worse* than ignoring the clock. With it,
-it helps a little and roughly halves the bias. **Tools ▸ Review Pace** lists
+it helps a little and roughly halves the bias. **Tools ▸ Pace Estimator** lists
 every hour, how many answers and how many separate days it rests on, and
 whether it qualified.
 
@@ -151,7 +151,7 @@ review stream, not per deck, so interleaving decks stays accurate.
 
 Every block can be turned off and reordered. Surfaces: the deck list, a deck's
 study screen, the top toolbar, a heads-up display while reviewing, and a
-detailed window at **Tools ▸ Review Pace…**.
+detailed window at **Tools ▸ Pace Estimator…**.
 
 ## Per-card time goal
 
@@ -186,7 +186,7 @@ from file. Requires Anki 23.10 or later; developed and tested against 26.8.
 ## Publishing
 
 See `PUBLISHING.md`. `./build.sh` runs the tests, strips `__pycache__` and
-`meta.json`, and writes `dist/review_pace.ankiaddon` with the files at the top
+`meta.json`, and writes `dist/pace_estimator.ankiaddon` with the files at the top
 level of the archive, which is what AnkiWeb requires.
 
 ## Development
@@ -197,7 +197,7 @@ The suite includes `tests/test_reviewer_js.py`, which runs the injected reviewer
 script under Node against a stub DOM and a fake clock, so the per-card timer is
 checked second by second rather than by eye. Those tests skip if Node is absent.
 
-`review_pace/src/stats.py` holds all the arithmetic and imports nothing from
+`pace_estimator/src/stats.py` holds all the arithmetic and imports nothing from
 Anki, so the numbers are testable without launching the app.
 
 Shortcuts are recorded with a purpose-built widget rather than Qt's
@@ -205,6 +205,6 @@ Shortcuts are recorded with a purpose-built widget rather than Qt's
 you release every key, with an ✕ to clear it. Escape cancels, Backspace clears.
 
 Turn on **Troubleshooting ▸ Write a debug log** in the settings to get
-`review_pace_debug.log` in your add-ons folder, or read the in-memory tail with
+`pace_estimator_debug.log` in your add-ons folder, or read the in-memory tail with
 **Show recent activity…**. Every hook the add-on registers is wrapped so a
 failure is logged rather than breaking the screen it is attached to.

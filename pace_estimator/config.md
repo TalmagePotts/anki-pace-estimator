@@ -1,6 +1,6 @@
-## Review Pace
+## Pace Estimator
 
-Use **Tools ▸ Review Pace… ▸ Settings**, or the ⚙ on the home-screen panel, for a
+Use **Tools ▸ Pace Estimator… ▸ Settings**, or the ⚙ on the home-screen panel, for a
 proper settings dialog with a deck picker. Editing the JSON here works too.
 
 - **decks.ids** — deck ids to track. Empty means the whole collection.
@@ -34,4 +34,4 @@ proper settings dialog with a deck picker. Editing the JSON here works too.
 - **goal.timer_phase** — `whole_card`, `question`, `answer` or `separate`.
 - **goal.answer_seconds** — the allowance for the answer, used by `separate`.
 - **goal.alert_phase** — `always`, `question` or `answer`.
-- **debug** — write a log to `review_pace_debug.log` in your add-ons folder.
+- **debug** — write a log to `pace_estimator_debug.log` in your add-ons folder.

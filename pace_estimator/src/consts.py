@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-ADDON_NAME = "Review Pace"
-ADDON_PACKAGE = "review_pace"
+ADDON_NAME = "Pace Estimator"
+ADDON_PACKAGE = "pace_estimator"
 
 # Component ids available on the home screen, in their default order.
 COMP_ETA = "eta"

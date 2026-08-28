@@ -100,7 +100,7 @@ def _on_overview(overview, content) -> None:
 
 
 def _on_js_message(handled, message: str, context):
-    if not isinstance(message, str) or not message.startswith("rvp:"):
+    if not isinstance(message, str) or not message.startswith("pace:"):
         return handled
     cmd = message[4:]
     if cmd == "config":
@@ -150,11 +150,11 @@ def _on_toolbar_links(links: List[str], toolbar) -> None:
         return
     links.append(
         toolbar.create_link(
-            "rvp_toolbar",
+            "pace_toolbar",
             text,
             _on_toolbar_click,
             tip="%s — click for details" % K.ADDON_NAME,
-            id="rvp_toolbar",
+            id="pace_toolbar",
         )
     )
 
@@ -332,7 +332,7 @@ def _toggle_hud() -> None:
     _hud_visible = not _hud_visible
     # Redrawing to show or hide the HUD must never restart the card's clock.
     _inject(getattr(mw.reviewer, "card", None), _phase, allow_restart=False)
-    tooltip("Review Pace HUD %s" % ("shown" if _hud_visible else "hidden"), period=900)
+    tooltip("Pace Estimator HUD %s" % ("shown" if _hud_visible else "hidden"), period=900)
 
 
 @L.guard("shortcuts")

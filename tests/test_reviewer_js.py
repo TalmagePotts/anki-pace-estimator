@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review_pace"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pace_estimator"))
 
 from src import config as C  # noqa: E402
 from src.session import LiveSession  # noqa: E402
@@ -39,7 +39,7 @@ const head = makeEl();
 global.document = {
   head,
   body: { appendChild(c) { registry[c.id] = c; } },
-  getElementById: (id) => registry[id] || (id === "rvp-style" ? null : null),
+  getElementById: (id) => registry[id] || (id === "pace-style" ? null : null),
   createElement: () => makeEl(),
 };
 global.window = {};
@@ -53,13 +53,13 @@ const readings = [];
 for (const offsetMs of OFFSETS_PLACEHOLDER) {
   NOW = 1_000_000 + offsetMs;
   tickFn();
-  const badge = registry["rvp-goal"];
-  const alert = registry["rvp-alert"];
+  const badge = registry["pace-goal"];
+  const alert = registry["pace-alert"];
   readings.push({
     ms: offsetMs,
     timer: badge && badge.style.display !== "none" ? badge.textContent : null,
     timerClass: badge ? badge.className : null,
-    alertShown: !!(alert && alert.className.indexOf("rvp-show") >= 0),
+    alertShown: !!(alert && alert.className.indexOf("pace-show") >= 0),
     alertClass: alert ? alert.className : null,
   });
 }
@@ -115,7 +115,7 @@ def test_timer_uses_the_card_stamp_not_the_injection_time():
     script = (
         HARNESS.replace(
             "SCRIPT_PLACEHOLDER",
-            "window.__rvpCardStart = NOW - 2000;\n" + RV.script(payload),
+            "window.__paceCardStart = NOW - 2000;\n" + RV.script(payload),
         ).replace("OFFSETS_PLACEHOLDER", json.dumps([0, 1000]))
     )
     out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
@@ -126,8 +126,8 @@ def test_timer_uses_the_card_stamp_not_the_injection_time():
 def test_badge_turns_red_only_when_over():
     r = run_timer({"count_down": True, "alert_style": "badge"}, [9000, 10000, 12000])
     assert r[0]["timerClass"] == ""
-    assert "rvp-over" in r[1]["timerClass"]
-    assert "rvp-over" in r[2]["timerClass"]
+    assert "pace-over" in r[1]["timerClass"]
+    assert "pace-over" in r[2]["timerClass"]
 
 
 def test_no_early_warning_stage():
@@ -150,11 +150,11 @@ def test_warning_only_mode_shows_nothing_until_time_is_up():
 def test_pulse_can_be_turned_off():
     on = run_timer({"alert_style": "both", "pulse_when_over": True}, [11000])[0]
     off = run_timer({"alert_style": "both", "pulse_when_over": False}, [11000])[0]
-    assert "rvp-pulsing" in on["alertClass"]
-    assert "rvp-over" in on["timerClass"] and "rvp-nopulse" not in on["timerClass"]
-    assert "rvp-pulsing" not in off["alertClass"]
+    assert "pace-pulsing" in on["alertClass"]
+    assert "pace-over" in on["timerClass"] and "pace-nopulse" not in on["timerClass"]
+    assert "pace-pulsing" not in off["alertClass"]
     assert off["alertShown"] is True  # still shown, just not animated
-    assert "rvp-nopulse" in off["timerClass"]
+    assert "pace-nopulse" in off["timerClass"]
 
 
 def test_bottom_middle_symbol_sits_at_the_bottom():
@@ -190,7 +190,7 @@ def test_every_alert_position_is_pinned_correctly():
             .replace("OFFSETS_PLACEHOLDER", "[11000]")
             .replace(
                 'console.log(JSON.stringify(readings));',
-                'console.log(JSON.stringify(registry["rvp-alert"].style));',
+                'console.log(JSON.stringify(registry["pace-alert"].style));',
             )
         )
         out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
@@ -225,5 +225,5 @@ def test_warning_fires_when_enabled_for_this_side():
     )
     out = subprocess.run([NODE, "-e", script], capture_output=True, text=True, timeout=30)
     readings = json.loads(out.stdout)
-    assert "rvp-over" in readings[0]["timerClass"]
+    assert "pace-over" in readings[0]["timerClass"]
     assert readings[0]["alertShown"] is True

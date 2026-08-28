@@ -65,7 +65,7 @@
     "period_mode": "rolling",
     "session_summary_minutes": 20,
     "speed_display": "mean",
-    "title": "Review Pace",
+    "title": "Pace Estimator",
     "show_title": true
   },
   "toolbar": {

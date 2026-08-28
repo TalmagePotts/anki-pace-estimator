@@ -184,7 +184,7 @@ class ConfigDialog(QDialog):
         self._original = copy.deepcopy(self.cfg)
         self._build()
         self._load()
-        restoreGeom(self, "rvp_config")
+        restoreGeom(self, "pace_config")
 
     # -- construction ----------------------------------------------------
     def _build(self) -> None:
@@ -419,7 +419,7 @@ class ConfigDialog(QDialog):
                 "Time of day is worth a little, but only with the guard above: "
                 "hourly averages are mostly a record of which days you studied in "
                 "which hours, so an hour has to appear on several separate days "
-                "before it may move an estimate. Tools ▸ Review Pace shows every "
+                "before it may move an estimate. Tools ▸ Pace Estimator shows every "
                 "hour and whether it qualified."
             )
         )
@@ -861,7 +861,7 @@ class ConfigDialog(QDialog):
             QMessageBox.question(
                 self,
                 K.ADDON_NAME,
-                "Reset every Review Pace setting to its default?",
+                "Reset every Pace Estimator setting to its default?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             )
             != QMessageBox.StandardButton.Yes
@@ -874,15 +874,15 @@ class ConfigDialog(QDialog):
     def accept(self) -> None:
         cfg = self._collect()
         mw.addonManager.writeConfig(K.ADDON_PACKAGE, cfg)
-        saveGeom(self, "rvp_config")
+        saveGeom(self, "pace_config")
         from .. import runtime
 
         runtime.on_config_changed()
-        tooltip("Review Pace settings saved", parent=mw)
+        tooltip("Pace Estimator settings saved", parent=mw)
         super().accept()
 
     def reject(self) -> None:
-        saveGeom(self, "rvp_config")
+        saveGeom(self, "pace_config")
         super().reject()
 
 

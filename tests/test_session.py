@@ -2,7 +2,7 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "review_pace"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pace_estimator"))
 
 from src.session import FULL_TRUST_AT, LiveSession, _scaled  # noqa: E402
 from src import stats as S  # noqa: E402

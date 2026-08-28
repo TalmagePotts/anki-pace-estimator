@@ -73,7 +73,7 @@ DEFAULTS: Dict[str, Any] = {
         "session_summary_minutes": 20,
         # Which seconds-per-card figure the home screen leads with.
         "speed_display": "mean",  # "mean", "typical" or "both"
-        "title": "Review Pace",
+        "title": "Pace Estimator",
         "show_title": True,
     },
     "toolbar": {

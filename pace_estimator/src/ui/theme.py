@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-PREFIX = "rvp"
+PREFIX = "pace"
 
 FG = "var(--fg, #2c2c2c)"
 FG_SUBTLE = "var(--fg-subtle, #777)"
