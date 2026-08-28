@@ -7,13 +7,13 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-declare -a NAMES=(home stats settings reviewer session)
+declare -a NAMES=(home stats reviewer session settings)
 declare -a HINTS=(
   "the deck list, with the panel showing cards due and an ETA"
   "Tools > Pace Estimator, scrolled to the by-deck table"
-  "the settings dialog, on the 'Speed & accuracy' tab"
-  "a card that has run over its time, with the ! showing"
+  "a card over its time, with the heads-up box and the ! both showing"
   "the deck list just after finishing a deck, showing the session summary"
+  "the settings dialog (optional, not used in the listing)"
 )
 
 name="${1:-}"

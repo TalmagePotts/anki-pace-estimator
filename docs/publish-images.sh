@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 missing=()
-for n in home stats settings reviewer session; do
+for n in home stats reviewer session; do
   [ -f "docs/images/$n.png" ] || missing+=("$n")
 done
 if [ ${#missing[@]} -gt 0 ]; then
@@ -18,6 +18,6 @@ git commit -m "Add listing screenshots" || echo "(nothing new to commit)"
 git push
 echo
 echo "Live. The listing's images now resolve at:"
-for n in home stats settings reviewer session; do
+for n in home stats reviewer session; do
   echo "  https://raw.githubusercontent.com/TalmagePotts/anki-pace-estimator/main/docs/images/$n.png"
 done

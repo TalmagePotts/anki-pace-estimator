@@ -65,7 +65,7 @@ a summary of the session you just finished.</p>
 as a heads-up display while reviewing, and in a detailed analysis window under
 Tools. Every block can be turned off and reordered.</p>
 
-<img src="https://raw.githubusercontent.com/TalmagePotts/anki-pace-estimator/main/docs/images/settings.png">
+<img src="https://raw.githubusercontent.com/TalmagePotts/anki-pace-estimator/main/docs/images/session.png">
 
 <h3>Per-card time goal</h3>
 
